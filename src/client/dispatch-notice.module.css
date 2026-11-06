@@ -1,0 +1,48 @@
+.dnh-dispatch-row {
+  display: flex;
+  min-width: 0;
+  min-height: calc(19px + var(--dsh-code-font-delta, 0px));
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-code-font-size, 11px);
+  line-height: calc(19px + var(--dsh-code-font-delta, 0px));
+}
+
+.dnh-dispatch-icon {
+  display: inline-flex;
+  width: calc(13px + var(--dsh-code-font-delta, 0px));
+  height: calc(13px + var(--dsh-code-font-delta, 0px));
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.dnh-dispatch-icon svg {
+  width: calc(11px + var(--dsh-code-font-delta, 0px));
+  height: calc(11px + var(--dsh-code-font-delta, 0px));
+}
+
+.dnh-dispatch-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dnh-dispatch-event,
+.dnh-dispatch-triggered,
+.dnh-dispatch-blocked {
+  color: inherit;
+  font-weight: 400;
+}
+
+.dnh-dispatch-separator {
+  padding: 0 4px;
+  color: inherit;
+}
+
+@media (hover: hover) {
+  .dnh-dispatch-row:hover {
+    color: var(--dsw-alias-label-secondary);
+  }
+}

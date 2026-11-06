@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-notice-hooks",
+    "description": "Configure automation Hooks for user and project scopes to run commands on session, tool, permission, and context-compaction events. Manage Hook authorization manually in Hooks setting."
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-session-start", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-session-start.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "^user$",
+        "hooks": [
+          { "id": "capture-user-prompt", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-user-prompt.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(bash|edit)$",
+        "hooks": [
+          { "id": "capture-before-tool", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-before-tool.json\"", "enabled": false, "timeoutMs": 10000, "maxConcurrent": 1 }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^bash$",
+        "hooks": [
+          { "id": "capture-after-tool", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-after-tool.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-tool-failure", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-tool-failure.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-permission", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-permission.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-subagent-start", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-subagent-start.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-subagent-stop", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-subagent-stop.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-stop", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-stop.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "^error$",
+        "hooks": [
+          { "id": "capture-stop-failure", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-stop-failure.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "^(manual|automatic)$",
+        "hooks": [
+          { "id": "capture-before-compact", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-before-compact.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "^(manual|automatic)$",
+        "hooks": [
+          { "id": "capture-after-compact", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-after-compact.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "PostCompactFailure": [
+      {
+        "matcher": "^(manual|automatic)$",
+        "hooks": [
+          { "id": "capture-compact-failure", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-compact-failure.json\"", "enabled": false }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          { "id": "capture-session-end", "type": "command", "command": "node \"/absolute/path/to/dsh-notice-hooks/examples/capture-hook.mjs\" \"/tmp/dsh-session-end.json\"", "enabled": false }
+        ]
+      }
+    ]
+  }
+}

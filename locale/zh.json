@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "dsh-notice-hooks",
+    "description": "为用户和项目配置自动化 Hook，在会话、工具调用、权限请求和上下文压缩等事件发生时运行命令。Hook 授权需在“Hooks 设置”中手动管理。"
+  }
+}
