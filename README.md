@@ -11,19 +11,35 @@ Configure automation Hooks for user and project scopes to run commands on sessio
 - `pnpm` 11.28.5 when building from source
 - A working Session and persistence stack in the target Host profile
 
-## Install from npm
+## Quick start
 
-Each DSH profile has an independent plugin installation. Install from the canonical npm registry with the profile you intend to run:
+### Desktop
+
+1. Open **Settings → Plugins** in DeepSeek Harness.
+2. Search for `dsh-notice-hooks`.
+3. Install the package from npm and enable it.
+4. Open **Hooks setting**.
+
+Desktop profiles are managed exclusively by the Electron application. The ordinary `dsh plugin --profile desktop` command is intentionally rejected.
+
+### CLI profiles
+
+Each DSH profile has an independent plugin installation. Install the package into the profile you actually run:
 
 ```sh
-dsh plugin --profile web add dsh-notice-hooks --registry=https://registry.npmjs.org/
-dsh plugin --profile headless add dsh-notice-hooks --registry=https://registry.npmjs.org/
-dsh plugin --profile tui add dsh-notice-hooks --registry=https://registry.npmjs.org/
+dsh plugin --profile web add dsh-notice-hooks
+dsh plugin --profile headless add dsh-notice-hooks
+dsh plugin --profile tui add dsh-notice-hooks
 ```
 
-As an optional installation mirror, replace the registry argument with `--registry=https://registry.npmmirror.com`. The mirror needs no separate submission or publication and may lag behind npm. The canonical publication and verification source is always `https://registry.npmjs.org/`.
+These commands use the npm registry configured by the user. An optional mirror may lag behind the canonical npm publication; do not publish the package separately to a mirror.
 
-Desktop profiles are managed exclusively by the Electron application. Open the in-app Plugin Manager, add `dsh-notice-hooks` from npm or a packed `.tgz`, and enable it there; the ordinary `dsh plugin --profile desktop` command is intentionally rejected.
+### After installation
+
+1. Create or edit `~/.dsh/hook.json` using [`examples/hook.json`](./examples/hook.json) as a starting point.
+2. Open **Hooks setting** and reload the configuration.
+3. Enable the intended Hook configuration.
+4. Review the command and explicitly authorize its current execution fingerprint.
 
 ## Install from source
 
@@ -38,7 +54,7 @@ pnpm pack
 Install the generated tarball into a non-Desktop profile, replacing the version when necessary:
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.1.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.2.tgz
 ```
 
 Packing is preferred to installing the source directory because it validates the same file set used by npm. If you do install a local directory, run `pnpm run build` first because the runtime entry points are under `lib/`.

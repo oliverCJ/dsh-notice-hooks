@@ -11,19 +11,35 @@
 - 从源码构建时使用 `pnpm` 11.28.5
 - 目标 Host profile 具有可用的 Session 与持久化基础设施
 
-## 从 npm 安装
+## 快速开始
 
-每个 DSH profile 独立安装插件。请把包安装到实际运行的 profile，官方 npm 命令如下：
+### Desktop
+
+1. 在 DeepSeek Harness 中打开 **设置 → 插件**。
+2. 搜索 `dsh-notice-hooks`。
+3. 从 npm 安装并启用插件。
+4. 打开 **Hooks 设置**。
+
+Desktop profile 由 Electron 应用专属管理；普通的 `dsh plugin --profile desktop` 命令会被有意拒绝。
+
+### CLI profile
+
+每个 DSH profile 独立安装插件。请把包安装到实际运行的 profile：
 
 ```sh
-dsh plugin --profile web add dsh-notice-hooks --registry=https://registry.npmjs.org/
-dsh plugin --profile headless add dsh-notice-hooks --registry=https://registry.npmjs.org/
-dsh plugin --profile tui add dsh-notice-hooks --registry=https://registry.npmjs.org/
+dsh plugin --profile web add dsh-notice-hooks
+dsh plugin --profile headless add dsh-notice-hooks
+dsh plugin --profile tui add dsh-notice-hooks
 ```
 
-可选安装镜像为 `--registry=https://registry.npmmirror.com`。npmmirror 不需要单独投稿或重复发布，并可能晚于 npm 官方源同步；唯一发布源和发布成功判据始终是 `https://registry.npmjs.org/`。
+这些命令使用用户自己配置的 npm registry。可选镜像可能晚于 npm 官方源同步，不要向镜像重复发布。
 
-Desktop profile 由 Electron 应用专属管理。请在应用内 Plugin Manager 中从 npm 或打包后的 `.tgz` 添加并启用 `dsh-notice-hooks`；普通的 `dsh plugin --profile desktop` 命令会被有意拒绝。
+### 安装后
+
+1. 以 [`examples/hook.json`](./examples/hook.json) 为起点创建或编辑 `~/.dsh/hook.json`。
+2. 打开 **Hooks 设置** 并重新加载配置。
+3. 开启需要使用的 Hook 配置。
+4. 检查命令内容，并明确授权当前执行指纹。
 
 ## 从源码安装
 
@@ -38,7 +54,7 @@ pnpm pack
 把生成的 tarball 安装到非 Desktop profile，版本变化时相应替换文件名：
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.1.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.2.tgz
 ```
 
 推荐安装 tarball，因为它会验证与 npm 发布相同的文件集合。如果直接安装源码目录，必须先运行 `pnpm run build`，运行入口位于 `lib/`。

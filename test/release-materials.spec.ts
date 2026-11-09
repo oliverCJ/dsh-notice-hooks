@@ -47,10 +47,23 @@ describe('release documentation', () => {
       expect(readme).toContain('git clone https://github.com/oliverCJ/dsh-notice-hooks.git')
       expect(readme).toContain('pnpm run check')
       expect(readme).toContain('pnpm pack')
-      expect(readme).toContain('--registry=https://registry.npmjs.org/')
-      expect(readme).toContain('--registry=https://registry.npmmirror.com')
-      expect(readme).toContain('dsh-notice-hooks-0.1.1.tgz')
+      expect(readme).not.toContain('--registry=')
+      expect(readme).toContain('dsh plugin --profile web add dsh-notice-hooks')
+      expect(readme).toContain('dsh-notice-hooks-0.1.2.tgz')
     }
+  })
+
+  it('provides bilingual quick-start and post-install steps', () => {
+    expect(englishReadme).toContain('## Quick start')
+    expect(englishReadme).toContain('### Desktop')
+    expect(englishReadme).toContain('### CLI profiles')
+    expect(englishReadme).toContain('### After installation')
+    expect(englishReadme).toContain('Open **Hooks setting**')
+    expect(chineseReadme).toContain('## 快速开始')
+    expect(chineseReadme).toContain('### Desktop')
+    expect(chineseReadme).toContain('### CLI profile')
+    expect(chineseReadme).toContain('### 安装后')
+    expect(chineseReadme).toContain('打开 **Hooks 设置**')
   })
 
   it('separates Host and Settings support without suggesting Desktop CLI installation', () => {
