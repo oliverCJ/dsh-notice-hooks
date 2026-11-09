@@ -41,6 +41,10 @@ These commands use the npm registry configured by the user. An optional mirror m
 3. Enable the intended Hook configuration.
 4. Review the command and explicitly authorize its current execution fingerprint.
 
+## Recommended companion: CC Notice
+
+`dsh-notice-hooks` provides lifecycle Hooks and explicit command authorization. Pair it with [CC Notice](https://github.com/oliverCJ/cc-notice) to turn DeepSeek Harness events into configurable desktop notifications, sounds, Webhooks, and hardware-device feedback. CC Notice includes DeepSeek Harness Hook setup; command authorization remains under your control in **Hooks setting**.
+
 ## Install from source
 
 ```sh

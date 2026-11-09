@@ -66,6 +66,19 @@ describe('release documentation', () => {
     expect(chineseReadme).toContain('打开 **Hooks 设置**')
   })
 
+  it('recommends CC Notice as an optional companion without weakening authorization', () => {
+    expect(englishReadme).toContain('## Recommended companion: CC Notice')
+    expect(chineseReadme).toContain('## 推荐搭配：CC Notice')
+    for (const readme of [englishReadme, chineseReadme]) {
+      expect(readme).toContain('https://github.com/oliverCJ/cc-notice')
+      expect(readme).toMatch(/desktop notifications|桌面通知/u)
+      expect(readme).toMatch(/sounds|声音/u)
+      expect(readme).toContain('Webhook')
+      expect(readme).toMatch(/hardware-device feedback|硬件设备反馈/u)
+      expect(readme).toMatch(/Hooks setting|Hooks 设置/u)
+    }
+  })
+
   it('separates Host and Settings support without suggesting Desktop CLI installation', () => {
     for (const readme of [englishReadme, chineseReadme]) {
       expect(readme).toMatch(/\| `web` .*\|.*\|.*\|/)

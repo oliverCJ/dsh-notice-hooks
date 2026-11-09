@@ -41,6 +41,10 @@ dsh plugin --profile tui add dsh-notice-hooks
 3. 开启需要使用的 Hook 配置。
 4. 检查命令内容，并明确授权当前执行指纹。
 
+## 推荐搭配：CC Notice
+
+`dsh-notice-hooks` 提供生命周期 Hook 和明确的命令授权；搭配 [CC Notice](https://github.com/oliverCJ/cc-notice)，可以把 DeepSeek Harness 事件转换为可自定义的桌面通知、声音、Webhook 和硬件设备反馈。CC Notice 已内置 DeepSeek Harness Hook 配置适配，命令授权仍由你在 **Hooks 设置** 中控制。
+
 ## 从源码安装
 
 ```sh
