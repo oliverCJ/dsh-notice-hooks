@@ -89,7 +89,7 @@ The plugin reads the user configuration from `~/.dsh/hook.json`, which applies t
 - `matcher` is an optional case-insensitive JavaScript regular expression. Missing or empty matches every value.
 - `id` is required, non-empty, and unique within its configuration file. User and project files are separate scopes and may use the same display ID.
 - `type` must be `"command"`.
-- `enabled` must be exactly `true` to declare that a Hook may be enabled. It does not grant execution authority; authorization must be granted manually in Settings.
+- `enabled` must be exactly `true` to declare that a Hook may be enabled. It does not grant execution authority; authorization must be granted through an explicit user action in Hooks setting or the session review dialog.
 - `timeoutMs` defaults to `10000` and accepts integers from `100` through `60000`.
 - `maxConcurrent` defaults to `1` and accepts integers from `1` through `4` for each Hook.
 
@@ -110,9 +110,9 @@ The plugin supports two independent configuration scopes:
 
 Execution authority is stored separately in `~/.dsh/dsh-notice-hooks/authorizations.json`. This user-owned file is created with mode `0600` under a `0700` plugin directory. Project files cannot grant project Hook authority, and existing `enabled: true` configurations are not grandfathered after an upgrade.
 
-A Hook runs only when its configuration declares `enabled: true` and Settings contains an approval for the current execution fingerprint. The fingerprint binds the scope, Hook ID, event, matcher source, command, timeout, and concurrency limit. Changing any of those values invalidates the approval and requires another manual enable action. The Settings state distinguishes `not-approved` from `fingerprint-changed`; both fail closed.
+A Hook runs only when its configuration declares `enabled: true` and the user has approved the current execution fingerprint through Hooks setting or the session review dialog. The fingerprint binds the scope, Hook ID, event, matcher source, command, timeout, and concurrency limit. Changing any of those values invalidates the approval and requires another manual enable action. The Settings state distinguishes `not-approved` from `fingerprint-changed`; both fail closed.
 
-Enabling a switch performs a revision-checked configuration write, rechecks the Hook definition, and then grants its current fingerprint. Disabling revokes authority before writing the declaration, so a failed configuration write does not leave a runnable Hook. All mutation transactions are serialized.
+Configuration and authorization are separate operations. The enable switch changes only the `enabled` declaration: enabling never grants authority, while disabling revokes authority before writing `enabled: false`. The authorization action and review dialog grant or revoke only the current fingerprint; revoking leaves the configuration enabled and does not change its revision. Granting requires an enabled configuration, performs revision and fingerprint checks, and compensates with a revoke if final verification fails. All mutation transactions are serialized.
 
 ## Events and matcher values
 
@@ -198,11 +198,19 @@ node examples/capture-hook.mjs /tmp/dsh-hook.json
 
 The Settings navigation label and page title are **Hooks setting** in English and **Hooks 设置** in Simplified Chinese. The scope selector sends only a public scope ID (`user` or `workspace:<id>`) to the Host; it never sends a Client-provided path or an internal runtime ID.
 
-The page always renders all 14 event groups in a fixed order, including during initial loading or when the service is unavailable. Controls remain disabled until status is available. Configured groups are expanded by default; empty groups stay compact but can be expanded. Reloading preserves expansion state independently for each scope. Every Hook has its own switch; this manual action is the only way to grant or revoke authorization, and the displayed effective state changes only after the Host confirms the transaction. Expanded details show the command, matcher, timeout, concurrency limit, authorization state, recent aggregate status, and public scope.
+The page always renders all 14 event groups in a fixed order, including during initial loading or when the service is unavailable. Controls remain disabled until status is available. Configured groups are expanded by default; empty groups stay compact but can be expanded. Reloading preserves expansion state independently for each scope. Every Hook has a configuration enable switch and a separate authorization action. Enabling a configuration leaves it unauthorized; revoking authorization keeps the switch on. Both states enter pending review. Disabling the configuration revokes authorization and suppresses review prompts. A selected scope with pending authorization shows a review banner and per-Hook status; its Review action opens the same authorization dialog used by the current session. The composer shows a compact review icon only when the current session's user or project scope has configured-but-unauthorized Hooks. The dialog displays command, matcher, timeout, concurrency, scope, and fingerprint-change status before the user explicitly authorizes selected or all currently shown Hooks. These actions never authorize future Hooks or changed fingerprints. Expanded Settings details continue to show the command, matcher, timeout, concurrency limit, authorization state, recent aggregate status, and public scope.
 
 Scope switching, reloads, and revision-conflict recovery reject stale responses, so a late response from an old scope cannot overwrite the current page. If a workspace is removed from the registry, the page falls back to the user scope and shows a localized notice. A missing project configuration shows an empty state without creating files. The page also reports the configuration path, invalid configuration, and service availability, but it is not a raw JSON editor.
 
 Configuration writes use revision and content-hash checks, reject symlinks and non-regular files, and replace the file atomically in the same directory. An external edit detected before replacement is rejected. Portable Node.js filesystem APIs do not provide conditional rename, so an uncooperative writer changing the file between the final hash check and rename remains a narrow race.
+
+## Authorization review
+
+The composer review icon is scoped to the current Session. It always checks the user configuration and adds only the registered Workspace that owns the current Session; it never scans cwd or shows pending Hooks from unrelated projects. The icon appears only for configured-enabled Hooks whose current fingerprint is not authorized.
+
+The review dialog defaults to no selection and shows scope, event, command, matcher, timeout, concurrency, and the reason authorization is required. `Authorize selected` processes checked Hooks; `Authorize all` processes only the Hooks currently shown. Both actions call the existing per-Hook Host transaction in user-before-project and configuration order. A failure stops later Hooks in that scope while other scopes may continue; successful items disappear immediately and failed items remain visible.
+
+Status is refreshed on mount, dialog open, window focus, connection reset, and every 15 seconds while a Session review control is mounted. Generation checks prevent older responses from replacing newer Host-confirmed state. The dialog traps focus, closes on Escape or its mask when idle, returns focus to the opener, and stays open while authorization is being submitted.
 
 ## Chat activity feedback
 
@@ -227,7 +235,7 @@ Hook spawn, exit, timeout, and parsing failures are diagnostic only. They do not
 
 **A Hook does not run**
 
-Check that `enabled` is exactly `true`, the Settings switch shows the Hook as authorized, the event name is supported, the regular expression matches the documented value, and the executable can be resolved without shell expansion. A direct configuration edit cannot grant authorization. Reload Settings and inspect the configuration diagnostic.
+Check that `enabled` is exactly `true`, the Settings configuration switch is on, the authorization state is Authorized, the event name is supported, the regular expression matches the documented value, and the executable can be resolved without shell expansion. A direct configuration edit cannot grant authorization. Reload Settings and inspect the configuration diagnostic.
 
 **`ENOENT` is reported**
 

@@ -44,20 +44,25 @@ describe('Hook Settings client API', () => {
     })
   })
 
-  it('reloads and writes encoded public scope and Hook ids without sending paths or runtime ids', async () => {
+  it('reloads and independently writes encoded configuration and authorization operations', async () => {
     const fetcher = vi.fn(async () => response({ ok: true, value: workspaceStatus }))
     const api = createHookApi(fetcher)
 
     await api.reload('workspace:alpha / beta')
-    await api.setEnabled('workspace:alpha / beta', 'notify / done', false, 4)
+    await api.setConfiguredEnabled('workspace:alpha / beta', 'notify / done', false, 4)
+    await api.setAuthorized('workspace:alpha / beta', 'notify / done', false, 4)
 
     expect(fetcher).toHaveBeenNthCalledWith(1, '/dsh-notice-hooks/reload', {
       method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ scope: 'workspace:alpha / beta' }),
     })
-    expect(fetcher).toHaveBeenNthCalledWith(2, '/dsh-notice-hooks/scopes/workspace%3Aalpha%20%2F%20beta/hooks/notify%20%2F%20done/enabled', {
+    expect(fetcher).toHaveBeenNthCalledWith(2, '/dsh-notice-hooks/scopes/workspace%3Aalpha%20%2F%20beta/hooks/notify%20%2F%20done/configured-enabled', {
       method: 'PUT', headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ enabled: false, revision: 4 }),
+    })
+    expect(fetcher).toHaveBeenNthCalledWith(3, '/dsh-notice-hooks/scopes/workspace%3Aalpha%20%2F%20beta/hooks/notify%20%2F%20done/authorization', {
+      method: 'PUT', headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ authorized: false, revision: 4 }),
     })
     const calls = fetcher.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>
     expect(calls.flatMap(call => [String(call[0]), call[1]?.body]).join('\n')).not.toContain('/work/alpha')

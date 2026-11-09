@@ -1,18 +1,21 @@
 import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down.js'
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js'
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import { HOOK_EVENTS, type HookEvent } from '../config.js'
 import { HookApiError, type HookApi, type HookScopeView, type HookStatus, type HookView } from './api.js'
 import type { MessageKey } from './i18n.js'
+import type { HookReviewSnapshot } from './review-controller.js'
 
 const css = {
-  actionError: 'dnh-action-error', command: 'dnh-command', controls: 'dnh-controls', count: 'dnh-count',
+  actionError: 'dnh-action-error', authorizationAction: 'dnh-authorization-action', command: 'dnh-command', controls: 'dnh-controls', count: 'dnh-count',
   description: 'dnh-description', details: 'dnh-details', detailGrid: 'dnh-detail-grid', error: 'dnh-error',
   eventBody: 'dnh-event-body', eventDescription: 'dnh-event-description', eventGroup: 'dnh-event-group',
   eventHeader: 'dnh-event-header', eventName: 'dnh-event-name', groupToggle: 'dnh-group-toggle', header: 'dnh-header',
-  heading: 'dnh-heading', hookHeader: 'dnh-hook-header', hookId: 'dnh-hook-id', hookRow: 'dnh-hook-row',
+  heading: 'dnh-heading', hookHeader: 'dnh-hook-header', hookId: 'dnh-hook-id', hookIdentity: 'dnh-hook-identity', hookRow: 'dnh-hook-row',
   list: 'dnh-list', meta: 'dnh-meta', notice: 'dnh-notice', path: 'dnh-path', reload: 'dnh-reload',
+  reviewAction: 'dnh-review-action', reviewBanner: 'dnh-review-banner', reviewState: 'dnh-review-state-chip', reviewStatePending: 'dnh-review-state-pending',
   scope: 'dnh-scope', scopeHelp: 'dnh-scope-help', scopeSelect: 'dnh-scope-select', section: 'dnh-section',
   switch: 'dnh-switch', track: 'dnh-track',
 } as const
@@ -27,12 +30,15 @@ const EVENT_DESCRIPTIONS: Record<HookEvent, MessageKey> = {
 
 export interface HookSettingsSectionProps {
   readonly api: HookApi
-  readonly t: (key: MessageKey) => string
+  readonly useHookReview: SnapshotSelectorHook<HookReviewSnapshot>
+  readonly openReview: (scopeIds: readonly string[], onStatus?: (status: HookStatus) => void) => Promise<void>
+  readonly acceptReviewStatus: (status: HookStatus) => void
+  readonly t: (key: MessageKey, params?: Record<string, unknown>) => string
 }
 
 function metric(value: number, label: string): string { return `${value} ${label}` }
 
-function HookRow({ hook, scopeId, revision, requestToken, loading, api, t, onStatus, onError }: {
+function HookRow({ hook, scopeId, revision, requestToken, loading, api, t, onStatus, onError, focusTargetKey, focusRequest, rowKey }: {
   readonly hook: HookView
   readonly scopeId: string
   readonly revision: number
@@ -42,24 +48,51 @@ function HookRow({ hook, scopeId, revision, requestToken, loading, api, t, onSta
   readonly requestToken: number
   readonly onStatus: (scopeId: string, status: HookStatus, token: number) => void
   readonly onError: (scopeId: string, error: unknown, token: number) => Promise<void>
+  readonly focusTargetKey: string | undefined
+  readonly focusRequest: number
+  readonly rowKey: string
 }) {
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
-  const change = async (enabled: boolean) => {
+  const actionElement = useRef<HTMLButtonElement | null>(null)
+  const isFocusTarget = focusTargetKey === rowKey
+  useLayoutEffect(() => {
+    if (!isFocusTarget) return
+    setExpanded(true)
+    queueMicrotask(() => {
+      if (typeof actionElement.current?.scrollIntoView === 'function') actionElement.current.scrollIntoView({ block: 'center' })
+      actionElement.current?.focus()
+    })
+  }, [focusRequest, isFocusTarget, rowKey])
+  const update = async (operation: () => Promise<HookStatus>) => {
     setBusy(true)
-    try { onStatus(scopeId, await api.setEnabled(scopeId, hook.id, enabled, revision), requestToken) }
+    try { onStatus(scopeId, await operation(), requestToken) }
     catch (error) { await onError(scopeId, error, requestToken) }
     finally { setBusy(false) }
   }
   const enableLabel = `${t('enable')} ${hook.id}`
   const detailsLabel = `${t(expanded ? 'hideDetails' : 'showDetails')} ${hook.id}`
+  const authorizationLabel = `${t(hook.authorized ? 'revokeAuthorization' : 'reviewAuthorization')} ${hook.id}`
+  const reviewKey: MessageKey = !hook.configuredEnabled
+    ? 'configurationDisabled'
+    : hook.authorized
+      ? 'reviewAuthorized'
+      : hook.authorizationReason === 'fingerprint-changed' ? 'reviewChanged' : 'reviewUnauthorized'
   return <div className={css.hookRow} aria-busy={busy}>
     <div className={css.hookHeader}>
-      <span className={css.hookId}>{hook.id}</span>
+      <div className={css.hookIdentity}>
+        <span className={css.hookId}>{hook.id}</span>
+        <span className={`${css.reviewState}${hook.configuredEnabled && !hook.authorized ? ` ${css.reviewStatePending}` : ''}`}>{t(reviewKey)}</span>
+      </div>
       <div className={css.controls}>
+        {hook.configuredEnabled && <button ref={element => { actionElement.current = element }} className={css.authorizationAction} type="button" title={authorizationLabel}
+          data-dnh-review-key={rowKey} aria-label={authorizationLabel} disabled={busy || loading}
+          onClick={() => void update(() => api.setAuthorized(scopeId, hook.id, !hook.authorized, revision))}>
+          {t(hook.authorized ? 'revokeAuthorizationAction' : 'reviewAuthorizationAction')}
+        </button>}
         <label className={css.switch} title={enableLabel}>
-          <input type="checkbox" checked={hook.enabled} disabled={busy || loading} aria-label={enableLabel}
-            onChange={(event) => { void change(event.currentTarget.checked) }} />
+          <input type="checkbox" checked={hook.configuredEnabled} disabled={busy || loading} aria-label={enableLabel}
+            onChange={(event) => { void update(() => api.setConfiguredEnabled(scopeId, hook.id, event.currentTarget.checked, revision)) }} />
           <span className={css.track} aria-hidden="true" />
         </label>
         <button className={css.groupToggle} type="button" title={detailsLabel} aria-label={detailsLabel}
@@ -95,20 +128,29 @@ function requestErrorKey(error: unknown, fallback: MessageKey): MessageKey {
   return fallback
 }
 
-export function HookSettingsSection({ api, t }: HookSettingsSectionProps) {
+export function HookSettingsSection({ api, useHookReview, openReview, acceptReviewStatus, t }: HookSettingsSectionProps) {
   const [scopes, setScopes] = useState<readonly HookScopeView[]>([])
   const [selectedScopeId, setSelectedScopeId] = useState('user')
   const [status, setStatus] = useState<HookStatus | null>(null)
+  const statusRef = useRef<HookStatus | null>(null)
+  statusRef.current = status
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<MessageKey | null>(null)
   const [expandedByScope, setExpandedByScope] = useState<ReadonlyMap<string, ReadonlySet<HookEvent>>>(() => new Map())
+  const [focusTargetKey, setFocusTargetKey] = useState<string | undefined>()
+  const [focusRequest, setFocusRequest] = useState(0)
+  const eventRefs = useRef(new Map<HookEvent, HTMLDivElement | null>())
   const generation = useRef(0)
   const selectedRef = useRef(selectedScopeId)
   selectedRef.current = selectedScopeId
+  const sharedStatus: HookStatus | undefined = useHookReview((snapshot: HookReviewSnapshot) => snapshot.byScope[selectedScopeId])
+  const currentStatus = sharedStatus ?? status
 
   const acceptStatus = useCallback((scopeId: string, value: HookStatus, token = generation.current) => {
     if (token !== generation.current || selectedRef.current !== scopeId || value.scope.id !== scopeId) return
+    if (statusRef.current !== null && value.revision < statusRef.current.revision) return
     setStatus(value)
+    acceptReviewStatus(value)
     setActionError(null)
     setExpandedByScope(previous => {
       if (previous.has(scopeId)) return previous
@@ -116,7 +158,7 @@ export function HookSettingsSection({ api, t }: HookSettingsSectionProps) {
       next.set(scopeId, new Set(value.hooks.map(hook => hook.event)))
       return next
     })
-  }, [])
+  }, [acceptReviewStatus])
 
   const loadScope = useCallback(async (scopeId: string, reload: boolean, token: number) => {
     setLoading(true)
@@ -205,6 +247,33 @@ export function HookSettingsSection({ api, t }: HookSettingsSectionProps) {
     setActionError(requestErrorKey(error, 'updateFailed'))
   }
 
+  const pendingHooks = currentStatus?.hooks.filter(hook => hook.configuredEnabled && !hook.authorized) ?? []
+  const reviewCurrentScope = () => {
+    if (currentStatus === null) return
+    const scopeId = currentStatus.scope.id
+    const first = HOOK_EVENTS.flatMap(event => currentStatus.hooks
+      .filter(hook => hook.event === event && hook.configuredEnabled && !hook.authorized)
+      .map(hook => ({ event, key: `${scopeId}\0${hook.id}` }))) [0]
+    if (first === undefined) return
+    setExpandedByScope(previous => {
+      const next = new Map(previous)
+      const events = new Set(next.get(scopeId) ?? [])
+      events.add(first.event)
+      next.set(scopeId, events)
+      return next
+    })
+    setFocusTargetKey(first.key)
+    setFocusRequest(value => value + 1)
+  }
+
+  useLayoutEffect(() => {
+    if (focusTargetKey === undefined) return
+    const event = currentStatus?.hooks.find(hook => `${currentStatus.scope.id}\0${hook.id}` === focusTargetKey)?.event
+    if (event === undefined) return
+    const element = eventRefs.current.get(event)
+    if (typeof element?.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
+  }, [currentStatus, focusRequest, focusTargetKey])
+
   const toggleEvent = (event: HookEvent) => setExpandedByScope(previous => {
     const next = new Map(previous)
     const events = new Set(next.get(selectedRef.current) ?? [])
@@ -230,32 +299,38 @@ export function HookSettingsSection({ api, t }: HookSettingsSectionProps) {
       </select>
     </div>}
 
-    {status !== null && <div className={css.meta}><span>{t('configPath')}</span><code className={css.path}>{status.path}</code></div>}
-    {loading && status === null && <div className={css.notice} role="status">{t('loading')}</div>}
+    {pendingHooks.length > 0 && <div className={css.reviewBanner} role="status">
+      <span>{t(pendingHooks.length === 1 ? 'reviewCountOne' : 'reviewCountMany', { count: pendingHooks.length })}</span>
+      <button className={css.reviewAction} type="button" disabled={loading} onClick={reviewCurrentScope}>{t('reviewAction')}</button>
+    </div>}
+    {currentStatus !== null && <div className={css.meta}><span>{t('configPath')}</span><code className={css.path}>{currentStatus.path}</code></div>}
+    {loading && currentStatus === null && <div className={css.notice} role="status">{t('loading')}</div>}
     {actionError !== null && <div className={css.actionError} role="alert">{t(actionError)}</div>}
-    {status !== null && !status.exists && status.scope.kind === 'workspace' && <div className={css.notice}>{t('missingProject')}</div>}
-    {status?.loadError !== null && status?.loadError !== undefined && <div className={css.error} role="alert">{t('loadError')} {status.loadError}</div>}
+    {currentStatus !== null && !currentStatus.exists && currentStatus.scope.kind === 'workspace' && <div className={css.notice}>{t('missingProject')}</div>}
+    {currentStatus?.loadError !== null && currentStatus?.loadError !== undefined && <div className={css.error} role="alert">{t('loadError')} {currentStatus.loadError}</div>}
 
     <div className={css.list}>
       {HOOK_EVENTS.map(event => {
-        const hooks = status?.hooks.filter(hook => hook.event === event) ?? []
-        const scopeId = status?.scope.id ?? selectedScopeId
+        const hooks = currentStatus?.hooks.filter(hook => hook.event === event) ?? []
+        const scopeId = currentStatus?.scope.id ?? selectedScopeId
         const expanded = expandedByScope.get(scopeId)?.has(event) === true
         const toggleLabel = `${t(expanded ? 'collapse' : 'expand')} ${event}`
-        return <section key={event} className={css.eventGroup} data-testid={`hook-event-${event}`} id={`dnh-event-${event}`} data-event={event}>
+        return <section key={event} ref={(element) => eventRefs.current.set(event, element as HTMLDivElement | null)} className={css.eventGroup} data-testid={`hook-event-${event}`} id={`dnh-event-${event}`} data-event={event}>
           <div data-testid="hook-event-group">
           <div className={css.eventHeader}>
             <button className={css.groupToggle} type="button" title={toggleLabel} aria-label={toggleLabel}
-              aria-expanded={expanded} disabled={status === null || loading} onClick={() => toggleEvent(event)}>
+              aria-expanded={expanded} disabled={currentStatus === null || loading} onClick={() => toggleEvent(event)}>
               {expanded ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
             </button>
             <div><h3 className={css.eventName}>{event}</h3><p className={css.eventDescription} data-testid="event-description">{t(EVENT_DESCRIPTIONS[event])}</p></div>
             {hooks.length > 0 && <span className={css.count}>{hooks.length}</span>}
           </div>
           {expanded && <div className={css.eventBody}>
-            {hooks.length === 0 ? <div className={css.notice}>{t('emptyEvent')}</div> : status !== null && hooks.map(hook =>
-              <HookRow key={`${status.scope.id}:${hook.id}`} hook={hook} scopeId={status.scope.id} revision={status.revision}
-                requestToken={generation.current} loading={loading} api={api} t={t} onStatus={updateStatus} onError={handleUpdateError} />)}
+            {hooks.length === 0 ? <div className={css.notice}>{t('emptyEvent')}</div> : currentStatus !== null && hooks.map(hook =>
+              <HookRow key={`${currentStatus.scope.id}:${hook.id}`} hook={hook} scopeId={currentStatus.scope.id} revision={currentStatus.revision}
+                requestToken={generation.current} loading={loading} api={api} t={t} onStatus={updateStatus}
+                onError={handleUpdateError} focusTargetKey={focusTargetKey} focusRequest={focusRequest}
+                rowKey={`${currentStatus.scope.id}\0${hook.id}`} />)}
           </div>}
           </div>
         </section>

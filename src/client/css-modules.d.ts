@@ -18,6 +18,16 @@ declare module 'lucide-react/dist/esm/icons/webhook.js' {
   export default Webhook
 }
 
+declare module 'lucide-react/dist/esm/icons/shield-alert.js' {
+  const ShieldAlert: typeof import('lucide-react').ShieldAlert
+  export default ShieldAlert
+}
+
+declare module 'lucide-react/dist/esm/icons/x.js' {
+  const X: typeof import('lucide-react').X
+  export default X
+}
+
 declare module '*.module.css' {
   const classes: Readonly<Record<string, string>>
   export default classes

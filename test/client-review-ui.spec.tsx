@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HookStatus, HookView } from '../src/client/api.js'
+import type { HookScopeView, HookStatus, HookView } from '../src/client/api.js'
 import { HookReviewButton } from '../src/client/review-button.js'
 import { HookReviewDialog } from '../src/client/review-dialog.js'
 import type { HookReviewSnapshot } from '../src/client/review-controller.js'
@@ -23,7 +24,7 @@ function hook(id: string, overrides: Partial<HookView> = {}): HookView {
   }
 }
 
-function status(scope: typeof userScope | typeof projectScope, hooks: readonly HookView[]): HookStatus {
+function status(scope: HookScopeView, hooks: readonly HookView[]): HookStatus {
   return { scope, path: scope.path, exists: true, revision: 1, loadError: null, hooks }
 }
 
@@ -61,7 +62,7 @@ function buttonProps(value: HookReviewSnapshot, workspaces: readonly unknown[] =
 function dialogProps(value: HookReviewSnapshot) {
   return {
     useHookReview: useSnapshot(value),
-    close: vi.fn(), toggle: vi.fn(), authorize: vi.fn(async () => undefined),
+    close: vi.fn(), toggle: vi.fn((_itemKey: string) => undefined), authorize: vi.fn(async (_mode: 'selected' | 'all') => undefined),
     t: translate(en),
   }
 }
@@ -69,7 +70,7 @@ function dialogProps(value: HookReviewSnapshot) {
 describe('Hook review composer button', () => {
   it('renders nothing when current session scopes have no pending Hooks', () => {
     const props = buttonProps(snapshot({ byScope: { user: status(userScope, []) } }))
-    const { container } = render(<HookReviewButton {...props as never} />)
+    const { container } = render(<HookReviewButton {...(props as ComponentProps<typeof HookReviewButton>)} />)
     expect(container).toBeEmptyDOMElement()
     expect(props.retain).toHaveBeenCalledWith('session-1', ['user'])
   })
@@ -85,7 +86,7 @@ describe('Hook review composer button', () => {
       },
     })
     const props = buttonProps(value, [other, project])
-    render(<HookReviewButton {...props as never} />)
+    render(<HookReviewButton {...(props as ComponentProps<typeof HookReviewButton>)} />)
 
     const button = screen.getByRole('button', { name: 'Review 2 Hook authorizations' })
     expect(button).toHaveAttribute('title', 'Review 2 Hook authorizations')
@@ -106,7 +107,7 @@ describe('Hook review dialog', () => {
 
   it('renders grouped execution details with nothing selected by default', () => {
     const props = dialogProps(openSnapshot)
-    render(<HookReviewDialog {...props as never} />)
+    render(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
 
     const dialog = screen.getByRole('dialog', { name: 'Review Hook authorizations' })
     expect(within(dialog).getByText('Hook commands run outside the DSH sandbox. Review each command before authorizing.')).toBeTruthy()
@@ -114,8 +115,8 @@ describe('Hook review dialog', () => {
     expect(within(dialog).getByRole('heading', { name: 'Project' })).toBeTruthy()
     expect(within(dialog).getByText('/usr/local/bin/notify --hook user-hook')).toBeTruthy()
     expect(within(dialog).getByText('notify --changed')).toBeTruthy()
-    expect(within(dialog).getByText('bash|edit')).toBeTruthy()
-    expect(within(dialog).getByText('10000 ms')).toBeTruthy()
+    expect(within(dialog).getAllByText(/Matcher: bash\|edit/)).toHaveLength(2)
+    expect(within(dialog).getAllByText(/Timeout: 10000 ms/)).toHaveLength(2)
     expect(within(dialog).getByText('Configuration changed')).toBeTruthy()
     expect(within(dialog).getAllByRole('checkbox')).toHaveLength(2)
     within(dialog).getAllByRole('checkbox').forEach(checkbox => expect(checkbox).not.toBeChecked())
@@ -125,7 +126,7 @@ describe('Hook review dialog', () => {
   it('routes selection, authorize-all, selected authorization, and close actions', () => {
     const selected = { ...openSnapshot, dialog: { ...openSnapshot.dialog!, selected: ['user\0user-hook'] } }
     const props = dialogProps(selected)
-    render(<HookReviewDialog {...props as never} />)
+    render(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
     const dialog = screen.getByRole('dialog')
 
     fireEvent.click(within(dialog).getAllByRole('checkbox')[1]!)
@@ -144,23 +145,43 @@ describe('Hook review dialog', () => {
     document.body.appendChild(opener)
     opener.focus()
     const props = dialogProps(openSnapshot)
-    const mounted = render(<HookReviewDialog {...props as never} />)
+    const mounted = render(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus())
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    const dialog = screen.getByRole('dialog')
+    const closeButton = screen.getByRole('button', { name: 'Close' })
+    const lastButton = screen.getByRole('button', { name: 'Authorize all' })
+    await waitFor(() => expect(closeButton).toHaveFocus())
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    expect(lastButton).toHaveFocus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(closeButton).toHaveFocus()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
     expect(props.close).toHaveBeenCalledOnce()
 
-    mounted.rerender(<HookReviewDialog {...dialogProps(snapshot()) as never} />)
+    mounted.rerender(<HookReviewDialog {...(dialogProps(snapshot()) as ComponentProps<typeof HookReviewDialog>)} />)
     await waitFor(() => expect(opener).toHaveFocus())
-    mounted.rerender(<HookReviewDialog {...props as never} />)
+    mounted.rerender(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
     fireEvent.click(screen.getByTestId('hook-review-mask'))
     expect(props.close).toHaveBeenCalledTimes(2)
     opener.remove()
   })
 
+  it('does not close the dialog while authorization is submitting', () => {
+    const submitting = { ...openSnapshot, dialog: { ...openSnapshot.dialog!, submitting: true } }
+    const props = dialogProps(submitting)
+    render(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
+    const dialog = screen.getByRole('dialog')
+    const closeButton = screen.getByRole('button', { name: 'Close' })
+    expect(closeButton).toBeDisabled()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    fireEvent.click(screen.getByTestId('hook-review-mask'))
+    fireEvent.click(closeButton)
+    expect(props.close).not.toHaveBeenCalled()
+  })
+
   it('renders localized Chinese action copy', () => {
     const props = { ...dialogProps(openSnapshot), t: translate(zh) }
-    render(<HookReviewDialog {...props as never} />)
+    render(<HookReviewDialog {...(props as ComponentProps<typeof HookReviewDialog>)} />)
     expect(screen.getByRole('dialog', { name: '审核 Hook 授权' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '授权全部' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '暂不处理' })).toBeTruthy()

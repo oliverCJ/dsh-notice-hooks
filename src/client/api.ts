@@ -52,7 +52,8 @@ export interface HookApi {
   scopes(): Promise<readonly HookScopeView[]>
   status(scopeId: string): Promise<HookStatus>
   reload(scopeId: string): Promise<HookStatus>
-  setEnabled(scopeId: string, id: string, enabled: boolean, revision: number): Promise<HookStatus>
+  setConfiguredEnabled(scopeId: string, id: string, enabled: boolean, revision: number): Promise<HookStatus>
+  setAuthorized(scopeId: string, id: string, authorized: boolean, revision: number): Promise<HookStatus>
 }
 
 export class HookApiError extends Error {
@@ -180,9 +181,14 @@ export function createHookApi(fetcher: Fetcher = globalThis.fetch.bind(globalThi
         method: 'POST', headers: jsonHeaders, body: JSON.stringify({ scope: scopeId }),
       }), value => parseStatus(value, scopeId))
     },
-    async setEnabled(scopeId, id, enabled, revision) {
-      return decode(await request(fetcher, `${API_PATH}/scopes/${encodeURIComponent(scopeId)}/hooks/${encodeURIComponent(id)}/enabled`, {
+    async setConfiguredEnabled(scopeId, id, enabled, revision) {
+      return decode(await request(fetcher, `${API_PATH}/scopes/${encodeURIComponent(scopeId)}/hooks/${encodeURIComponent(id)}/configured-enabled`, {
         method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ enabled, revision }),
+      }), value => parseStatus(value, scopeId))
+    },
+    async setAuthorized(scopeId, id, authorized, revision) {
+      return decode(await request(fetcher, `${API_PATH}/scopes/${encodeURIComponent(scopeId)}/hooks/${encodeURIComponent(id)}/authorization`, {
+        method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ authorized, revision }),
       }), value => parseStatus(value, scopeId))
     },
   }

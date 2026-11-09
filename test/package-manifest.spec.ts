@@ -63,6 +63,10 @@ describe('npm package manifest', () => {
     expect(manifest.dsh?.client?.inject).toEqual(expect.arrayContaining([
       '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-chat',
+      '@deepseek-ai/dsh-client-ui-layout',
+      '@deepseek-ai/dsh-client-ui-session',
+      '@deepseek-ai/dsh-client-ui-workspace',
+      '@deepseek-ai/dsh-api-workspace-controller',
     ]))
     expect(manifest.peerDependencies).not.toHaveProperty('@deepseek-ai/dsh-client-ui-conversation')
     expect(manifest.peerDependencies).not.toHaveProperty('@deepseek-ai/dsh-client-ui-chat')

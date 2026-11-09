@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Command Hooks">
+  <rect width="128" height="128" rx="24" fill="#202522"/>
+  <path d="M38 30v29c0 24 14 39 36 39 16 0 28-10 28-25 0-13-9-22-22-22H66" fill="none" stroke="#67d391" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="38" cy="29" r="10" fill="#f2b84b"/>
+  <path d="m59 42 13 9-13 9" fill="none" stroke="#f4f7f5" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

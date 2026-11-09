@@ -20,6 +20,9 @@ type ApprovalMap = Map<string, Map<string, AuthorizationFingerprint>>
 export interface AuthorizationStore {
   get(scopeId: string, hookId: string): AuthorizationFingerprint | undefined
   grant(scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): Promise<void>
+  prepareGrant(scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): Promise<void>
+  commitGrant(scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): Promise<void>
+  abortGrant(scopeId: string, hookId: string): Promise<void>
   revoke(scopeId: string, hookId: string): Promise<void>
 }
 
@@ -74,19 +77,10 @@ function validateFingerprint(fingerprint: string): asserts fingerprint is Author
   if (!FINGERPRINT_PATTERN.test(fingerprint)) throw new Error('authorization fingerprint is invalid')
 }
 
-function parseApprovals(raw: string): ApprovalMap {
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch (error) {
-    throw new Error(`invalid authorization JSON: ${errorText(error)}`)
-  }
-  if (!isRecord(value) || value.version !== AUTHORIZATION_VERSION || !isRecord(value.scopes)) {
-    throw new Error('authorization document version or scopes is invalid')
-  }
-
-  const approvals: ApprovalMap = new Map()
-  for (const [scopeId, scopeValue] of Object.entries(value.scopes)) {
+function parseEntries(value: unknown, label: string): ApprovalMap {
+  if (!isRecord(value)) throw new Error(`authorization ${label} is invalid`)
+  const result: ApprovalMap = new Map()
+  for (const [scopeId, scopeValue] of Object.entries(value)) {
     if (scopeId.length === 0 || !isRecord(scopeValue)) throw new Error('authorization scope is invalid')
     const hooks = new Map<string, AuthorizationFingerprint>()
     for (const [hookId, fingerprint] of Object.entries(scopeValue)) {
@@ -94,20 +88,43 @@ function parseApprovals(raw: string): ApprovalMap {
       validateFingerprint(fingerprint)
       hooks.set(hookId, fingerprint)
     }
-    approvals.set(scopeId, hooks)
+    result.set(scopeId, hooks)
   }
-  return approvals
+  return result
 }
 
-function serializeApprovals(approvals: ApprovalMap): string {
-  const scopes: Record<string, Record<string, AuthorizationFingerprint>> = Object.create(null)
-  for (const [scopeId, hooks] of approvals) {
+function parseAuthorizationState(raw: string): { approvals: ApprovalMap; pending: ApprovalMap } {
+  let value: unknown
+  try {
+    value = JSON.parse(raw)
+  } catch (error) {
+    throw new Error(`invalid authorization JSON: ${errorText(error)}`)
+  }
+  if (!isRecord(value) || value.version !== AUTHORIZATION_VERSION || !isRecord(value.scopes)
+    || !('pending' in value ? isRecord(value.pending) : true)) {
+    throw new Error('authorization document version or scopes is invalid')
+  }
+  return {
+    approvals: parseEntries(value.scopes, 'scopes'),
+    pending: 'pending' in value ? parseEntries(value.pending, 'pending grants') : new Map(),
+  }
+}
+
+function entriesOf(values: ApprovalMap): Record<string, Record<string, AuthorizationFingerprint>> {
+  const result: Record<string, Record<string, AuthorizationFingerprint>> = Object.create(null)
+  for (const [scopeId, hooks] of values) {
     if (hooks.size === 0) continue
     const entries: Record<string, AuthorizationFingerprint> = Object.create(null)
     for (const [hookId, fingerprint] of hooks) entries[hookId] = fingerprint
-    scopes[scopeId] = entries
+    result[scopeId] = entries
   }
-  return `${JSON.stringify({ version: AUTHORIZATION_VERSION, scopes }, null, 2)}\n`
+  return result
+}
+
+function serializeAuthorizationState(approvals: ApprovalMap, pending: ApprovalMap): string {
+  const value: Record<string, unknown> = { version: AUTHORIZATION_VERSION, scopes: entriesOf(approvals) }
+  if (pending.size > 0) value.pending = entriesOf(pending)
+  return `${JSON.stringify(value, null, 2)}\n`
 }
 
 function cloneApprovals(approvals: ApprovalMap): ApprovalMap {
@@ -212,6 +229,7 @@ export async function openAuthorizationStore(
   const logger = options.logger ?? DEFAULT_LOGGER
   const dependencies = { ...DEFAULT_DEPENDENCIES, ...dependencyOverrides }
   let approvals: ApprovalMap = new Map()
+  let pending: ApprovalMap = new Map()
   let diskSignature: string | null = null
   let loadError: Error | undefined
   let serial: Promise<unknown> = Promise.resolve()
@@ -219,7 +237,9 @@ export async function openAuthorizationStore(
   try {
     const disk = await readDisk(path)
     if (disk !== null) {
-      approvals = parseApprovals(disk.raw)
+      const parsed = parseAuthorizationState(disk.raw)
+      approvals = parsed.approvals
+      pending = parsed.pending
       diskSignature = disk.signature
     }
   } catch (error) {
@@ -233,16 +253,30 @@ export async function openAuthorizationStore(
     return result
   }
 
-  async function persist(next: ApprovalMap): Promise<void> {
+  async function persist(nextApprovals: ApprovalMap, nextPending = pending): Promise<void> {
     if (loadError !== undefined) throw loadError
-    const raw = serializeApprovals(next)
+    const raw = serializeAuthorizationState(nextApprovals, nextPending)
     try {
       diskSignature = await atomicWrite(path, raw, diskSignature, dependencies)
-      approvals = next
+      approvals = nextApprovals
+      pending = nextPending
     } catch (error) {
       logger.warn('Failed to update Hook authorizations; authorization remains unchanged.', errorText(error))
       throw error
     }
+  }
+
+  function put(values: ApprovalMap, scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): void {
+    const hooks = values.get(scopeId) ?? new Map<string, AuthorizationFingerprint>()
+    hooks.set(hookId, fingerprint)
+    values.set(scopeId, hooks)
+  }
+
+  function remove(values: ApprovalMap, scopeId: string, hookId: string): void {
+    const hooks = values.get(scopeId)
+    if (hooks === undefined) return
+    hooks.delete(hookId)
+    if (hooks.size === 0) values.delete(scopeId)
   }
 
   return {
@@ -253,22 +287,52 @@ export async function openAuthorizationStore(
       return enqueue(async () => {
         validateIdentity(scopeId, hookId)
         validateFingerprint(fingerprint)
-        const next = cloneApprovals(approvals)
-        const hooks = next.get(scopeId) ?? new Map<string, AuthorizationFingerprint>()
-        hooks.set(hookId, fingerprint)
-        next.set(scopeId, hooks)
-        await persist(next)
+        const nextApprovals = cloneApprovals(approvals)
+        const nextPending = cloneApprovals(pending)
+        put(nextApprovals, scopeId, hookId, fingerprint)
+        remove(nextPending, scopeId, hookId)
+        await persist(nextApprovals, nextPending)
+      })
+    },
+    prepareGrant(scopeId, hookId, fingerprint) {
+      return enqueue(async () => {
+        validateIdentity(scopeId, hookId)
+        validateFingerprint(fingerprint)
+        const nextPending = cloneApprovals(pending)
+        put(nextPending, scopeId, hookId, fingerprint)
+        await persist(approvals, nextPending)
+      })
+    },
+    commitGrant(scopeId, hookId, fingerprint) {
+      return enqueue(async () => {
+        validateIdentity(scopeId, hookId)
+        validateFingerprint(fingerprint)
+        if (pending.get(scopeId)?.get(hookId) !== fingerprint) throw new Error('prepared authorization does not match')
+        const nextApprovals = cloneApprovals(approvals)
+        const nextPending = cloneApprovals(pending)
+        put(nextApprovals, scopeId, hookId, fingerprint)
+        remove(nextPending, scopeId, hookId)
+        await persist(nextApprovals, nextPending)
+      })
+    },
+    abortGrant(scopeId, hookId) {
+      return enqueue(async () => {
+        validateIdentity(scopeId, hookId)
+        if (!pending.get(scopeId)?.has(hookId)) return
+        const nextPending = cloneApprovals(pending)
+        remove(nextPending, scopeId, hookId)
+        await persist(approvals, nextPending)
       })
     },
     revoke(scopeId, hookId) {
       return enqueue(async () => {
         validateIdentity(scopeId, hookId)
-        if (!approvals.get(scopeId)?.has(hookId)) return
-        const next = cloneApprovals(approvals)
-        const hooks = next.get(scopeId)!
-        hooks.delete(hookId)
-        if (hooks.size === 0) next.delete(scopeId)
-        await persist(next)
+        if (!approvals.get(scopeId)?.has(hookId) && !pending.get(scopeId)?.has(hookId)) return
+        const nextApprovals = cloneApprovals(approvals)
+        const nextPending = cloneApprovals(pending)
+        remove(nextApprovals, scopeId, hookId)
+        remove(nextPending, scopeId, hookId)
+        await persist(nextApprovals, nextPending)
       })
     },
   }

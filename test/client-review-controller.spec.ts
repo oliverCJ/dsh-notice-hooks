@@ -28,7 +28,8 @@ function api(overrides: Partial<HookApi> = {}): HookApi {
     scopes: vi.fn(async () => [userScope, projectScope]),
     status: vi.fn(async scopeId => scopeId === 'user' ? status(userScope, []) : status(projectScope, [])),
     reload: vi.fn(async scopeId => scopeId === 'user' ? status(userScope, []) : status(projectScope, [])),
-    setEnabled: vi.fn(async () => { throw new Error('unexpected setEnabled') }),
+    setConfiguredEnabled: vi.fn(async () => { throw new Error('unexpected setConfiguredEnabled') }),
+    setAuthorized: vi.fn(async () => { throw new Error('unexpected setAuthorized') }),
     ...overrides,
   }
 }
@@ -90,7 +91,7 @@ describe('HookReviewController', () => {
     controller.dispose()
   })
 
-  it('rejects stale status responses and removes a scope confirmed missing', async () => {
+  it('serializes same-scope refreshes and removes a scope confirmed missing', async () => {
     const first = deferred<HookStatus>()
     const second = deferred<HookStatus>()
     const statusFn = vi.fn()
@@ -101,10 +102,12 @@ describe('HookReviewController', () => {
 
     const older = controller.refresh(['user'])
     const newer = controller.refresh(['user'])
-    second.resolve(status(userScope, [hook('new')], 2))
-    await newer
+    await vi.waitFor(() => expect(statusFn).toHaveBeenCalledTimes(1))
     first.resolve(status(userScope, [hook('old')], 1))
     await older
+    await vi.waitFor(() => expect(statusFn).toHaveBeenCalledTimes(2))
+    second.resolve(status(userScope, [hook('new')], 2))
+    await newer
     expect(controller.source.getSnapshot().byScope.user?.hooks[0]?.id).toBe('new')
 
     await controller.refresh(['user'])
@@ -113,20 +116,64 @@ describe('HookReviewController', () => {
     controller.dispose()
   })
 
+  it('does not let an older refresh overwrite a newer accepted Host status', async () => {
+    const pending = deferred<HookStatus>()
+    const controller = new HookReviewController({ api: api({ status: vi.fn(() => pending.promise) }) })
+    const refresh = controller.refresh(['user'])
+    const approved = status(userScope, [hook('new', { authorized: true, enabled: true, authorizationReason: 'approved' })], 3)
+    controller.accept(approved)
+    pending.resolve(status(userScope, [hook('old')], 2))
+    await refresh
+
+    expect(controller.source.getSnapshot().byScope.user).toBe(approved)
+    expect(controller.source.getSnapshot().loadingScopes).toEqual([])
+    controller.dispose()
+  })
+
+  it('rejects a lower-revision status accepted from another UI path', () => {
+    const controller = new HookReviewController({ api: api() })
+    const newer = status(userScope, [hook('new')], 5)
+    controller.accept(newer)
+    controller.accept(status(userScope, [hook('old')], 4))
+    expect(controller.source.getSnapshot().byScope.user).toBe(newer)
+    controller.dispose()
+  })
+
+  it('serializes same-scope mutations so equal-revision responses cannot arrive out of order', async () => {
+    const first = deferred<HookStatus>()
+    const second = deferred<HookStatus>()
+    const setAuthorized = vi.fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const controller = new HookReviewController({ api: api({ setAuthorized }) })
+    const firstUpdate = controller.clientApi.setAuthorized('user', 'u1', false, 4)
+    const secondUpdate = controller.clientApi.setAuthorized('user', 'u2', false, 4)
+
+    await vi.waitFor(() => expect(setAuthorized).toHaveBeenCalledTimes(1))
+    first.resolve(status(userScope, [hook('u1'), hook('u2', { authorized: true, enabled: true, authorizationReason: 'approved' })], 4))
+    await firstUpdate
+    await vi.waitFor(() => expect(setAuthorized).toHaveBeenCalledTimes(2))
+    second.resolve(status(userScope, [hook('u1'), hook('u2')], 4))
+    await secondUpdate
+
+    expect(controller.source.getSnapshot().byScope.user?.hooks.every(hook => !hook.authorized)).toBe(true)
+    controller.dispose()
+  })
+
   it('authorizes selected Hooks with revision chaining and closes when none remain', async () => {
     const userInitial = status(userScope, [hook('u1'), hook('u2')], 4)
     const userAfterFirst = status(userScope, [
       hook('u1', { authorized: true, enabled: true, authorizationReason: 'approved' }), hook('u2'),
-    ], 5)
+    ], 4)
     const userAfterSecond = status(userScope, [
       hook('u1', { authorized: true, enabled: true, authorizationReason: 'approved' }),
       hook('u2', { authorized: true, enabled: true, authorizationReason: 'approved' }),
-    ], 6)
-    const setEnabled = vi.fn()
+    ], 4)
+    const setAuthorized = vi.fn()
       .mockResolvedValueOnce(userAfterFirst)
       .mockResolvedValueOnce(userAfterSecond)
     const onStatus = vi.fn()
-    const controller = new HookReviewController({ api: api({ status: vi.fn(async () => userInitial), setEnabled }) })
+    const controller = new HookReviewController({ api: api({ status: vi.fn(async () => userInitial), setAuthorized }) })
     controller.accept(userInitial)
     await controller.open(['user'], onStatus)
     controller.toggle('user\0u1')
@@ -134,9 +181,9 @@ describe('HookReviewController', () => {
 
     await controller.authorize('selected')
 
-    expect(setEnabled.mock.calls).toEqual([
+    expect(setAuthorized.mock.calls).toEqual([
       ['user', 'u1', true, 4],
-      ['user', 'u2', true, 5],
+      ['user', 'u2', true, 4],
     ])
     expect(onStatus).toHaveBeenLastCalledWith(userAfterSecond)
     expect(controller.source.getSnapshot().dialog).toBeNull()
@@ -147,19 +194,19 @@ describe('HookReviewController', () => {
     const user = status(userScope, [hook('u1'), hook('u2')], 3)
     const project = status(projectScope, [hook('p1')], 7)
     const projectDone = status(projectScope, [hook('p1', { authorized: true, enabled: true, authorizationReason: 'approved' })], 8)
-    const setEnabled = vi.fn(async (scopeId: string, id: string) => {
+    const setAuthorized = vi.fn(async (scopeId: string, id: string) => {
       if (scopeId === 'user' && id === 'u1') throw new HookApiError('revision_conflict', 'changed', 409)
       if (scopeId === 'workspace:project' && id === 'p1') return projectDone
       throw new Error('same-scope processing should have stopped')
     })
-    const controller = new HookReviewController({ api: api({ status: vi.fn(async scopeId => scopeId === 'user' ? user : project), setEnabled }) })
+    const controller = new HookReviewController({ api: api({ status: vi.fn(async scopeId => scopeId === 'user' ? user : project), setAuthorized }) })
     controller.accept(user)
     controller.accept(project)
     await controller.open(['user', 'workspace:project'])
 
     await controller.authorize('all')
 
-    expect(setEnabled.mock.calls.map(call => call.slice(0, 2))).toEqual([
+    expect(setAuthorized.mock.calls.map(call => call.slice(0, 2))).toEqual([
       ['user', 'u1'],
       ['workspace:project', 'p1'],
     ])

@@ -47,6 +47,13 @@ export interface ScopedHook extends ResolvedHookStatus {
   readonly runtimeId: string
 }
 
+export class HookNotConfiguredEnabledError extends Error {
+  constructor(readonly hookId: string) {
+    super(`hook is not configured enabled: ${hookId}`)
+    this.name = 'HookNotConfiguredEnabledError'
+  }
+}
+
 export interface HookScopeManager {
   listScopes(): readonly HookScopeView[]
   accessScope(scopeId: string): Promise<HookScopeBinding>
@@ -55,7 +62,8 @@ export interface HookScopeManager {
   currentScopes(): readonly HookScopeBinding[]
   subscribe(listener: () => void): () => void
   scopeHook(binding: HookScopeBinding, hook: ResolvedHook): ScopedHook
-  updateHookEnabled(binding: HookScopeBinding, hookId: string, enabled: boolean, expectedRevision: number): Promise<HookConfigState>
+  updateHookConfiguredEnabled(binding: HookScopeBinding, hookId: string, enabled: boolean, expectedRevision: number): Promise<HookConfigState>
+  updateHookAuthorization(binding: HookScopeBinding, hookId: string, authorized: boolean, expectedRevision: number): Promise<HookConfigState>
   dispose(): Promise<void>
 }
 
@@ -395,52 +403,69 @@ export async function createHookScopeManager(
     return new HookConfigConflictError(expectedRevision, actualRevision)
   }
 
-  function updateHookEnabled(
+  function assertBinding(binding: HookScopeBinding): void {
+    assertActive()
+    if (runtimeScopeIds.get(binding) === undefined) throw new Error('unknown hook scope binding')
+  }
+
+  function updateHookConfiguredEnabled(
     binding: HookScopeBinding,
     hookId: string,
     enabled: boolean,
     expectedRevision: number,
   ): Promise<HookConfigState> {
     return enqueueUpdate(async () => {
-      assertActive()
-      if (runtimeScopeIds.get(binding) === undefined) throw new Error('unknown hook scope binding')
+      assertBinding(binding)
+      if (enabled) return binding.store.setEnabled(hookId, true, expectedRevision)
 
-      if (!enabled) {
-        const checked = await binding.store.reload()
-        if (checked.revision !== expectedRevision) throw conflict(expectedRevision, checked.revision)
-        hookFrom(checked, hookId)
+      const checked = await binding.store.reload()
+      if (checked.revision !== expectedRevision) throw conflict(expectedRevision, checked.revision)
+      hookFrom(checked, hookId)
+      await authorizationStore.revoke(binding.scope.id, hookId)
+      emit()
+      return binding.store.setEnabled(hookId, false, expectedRevision)
+    })
+  }
+
+  function updateHookAuthorization(
+    binding: HookScopeBinding,
+    hookId: string,
+    authorized: boolean,
+    expectedRevision: number,
+  ): Promise<HookConfigState> {
+    return enqueueUpdate(async () => {
+      assertBinding(binding)
+      const checked = await binding.store.reload()
+      if (checked.revision !== expectedRevision) throw conflict(expectedRevision, checked.revision)
+      const checkedHook = hookFrom(checked, hookId)
+
+      if (!authorized) {
         await authorizationStore.revoke(binding.scope.id, hookId)
         emit()
-        return binding.store.setEnabled(hookId, false, expectedRevision)
+        return checked
       }
+      if (!checkedHook.enabled) throw new HookNotConfiguredEnabledError(hookId)
 
-      const configured = await binding.store.setEnabled(hookId, true, expectedRevision)
-      const configuredHook = hookFrom(configured, hookId)
-      const expectedFingerprint = resolveHookStatus(binding.scope.id, configuredHook).fingerprint
-      const confirmed = await binding.store.reload()
-      const confirmedHook = confirmed.hooks.find(value => value.id === hookId)
-      const confirmedFingerprint = confirmedHook === undefined
-        ? undefined
-        : resolveHookStatus(binding.scope.id, confirmedHook).fingerprint
-      if (confirmed.revision !== configured.revision || confirmedFingerprint !== expectedFingerprint) {
-        throw conflict(configured.revision, confirmed.revision)
-      }
-
-      await authorizationStore.grant(binding.scope.id, hookId, expectedFingerprint)
-      emit()
+      const expectedFingerprint = resolveHookStatus(binding.scope.id, checkedHook).fingerprint
+      await authorizationStore.prepareGrant(binding.scope.id, hookId, expectedFingerprint)
       try {
         const finalState = await binding.store.reload()
         const finalHook = finalState.hooks.find(value => value.id === hookId)
         const finalFingerprint = finalHook === undefined
           ? undefined
           : resolveHookStatus(binding.scope.id, finalHook).fingerprint
-        if (finalState.revision !== configured.revision || finalFingerprint !== expectedFingerprint) {
-          throw conflict(configured.revision, finalState.revision)
+        if (finalState.revision !== checked.revision || finalFingerprint !== expectedFingerprint || !finalHook?.enabled) {
+          throw conflict(checked.revision, finalState.revision)
         }
+        await authorizationStore.commitGrant(binding.scope.id, hookId, expectedFingerprint)
+        emit()
         return finalState
       } catch (error) {
-        await authorizationStore.revoke(binding.scope.id, hookId)
-        emit()
+        try {
+          await authorizationStore.abortGrant(binding.scope.id, hookId)
+        } catch (cleanupError) {
+          throw new AggregateError([error, cleanupError], 'Hook authorization failed and its pending record could not be removed')
+        }
         throw error
       }
     })
@@ -469,7 +494,8 @@ export async function createHookScopeManager(
     currentScopes,
     subscribe,
     scopeHook,
-    updateHookEnabled,
+    updateHookConfiguredEnabled,
+    updateHookAuthorization,
     dispose,
   }
 }

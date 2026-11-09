@@ -97,6 +97,28 @@ describe('AuthorizationStore loading', () => {
 })
 
 describe('AuthorizationStore mutations', () => {
+  it('keeps prepared grants non-executable across restart until committed', async () => {
+    const testHome = await home()
+    const store = await openAuthorizationStore({ home: testHome })
+    const prepared = store as AuthorizationStore & {
+      prepareGrant(scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): Promise<void>
+      commitGrant(scopeId: string, hookId: string, fingerprint: AuthorizationFingerprint): Promise<void>
+    }
+
+    await prepared.prepareGrant('user', 'notify', fingerprintA)
+    expect(store.get('user', 'notify')).toBeUndefined()
+    expect(JSON.parse(await readFile(resolveAuthorizationPath(testHome), 'utf8'))).toEqual({
+      version: 1,
+      scopes: {},
+      pending: { user: { notify: fingerprintA } },
+    })
+
+    const reopened = await openAuthorizationStore({ home: testHome })
+    expect(reopened.get('user', 'notify')).toBeUndefined()
+    await (reopened as typeof prepared).commitGrant('user', 'notify', fingerprintA)
+    expect(reopened.get('user', 'notify')).toBe(fingerprintA)
+  })
+
   it('stores user and project approvals only in the owner authorization file with restrictive permissions', async () => {
     const testHome = await home()
     const store = await openAuthorizationStore({ home: testHome })

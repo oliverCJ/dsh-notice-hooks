@@ -38,17 +38,24 @@ function context() {
       return dispose
     }),
   }
+  const eventDisposers: Array<ReturnType<typeof vi.fn>> = []
+  const on = vi.fn(() => {
+    const dispose = vi.fn()
+    eventDisposers.push(dispose)
+    return dispose
+  })
   const ctx = {
     locale,
     slots,
     uiConversation,
-    effect: vi.fn((setup: () => (() => void)) => {
-      const dispose = setup()
+    on,
+    effect: vi.fn((setup: () => void | (() => void)) => {
+      const dispose = setup() ?? (() => undefined)
       effects.push(dispose)
       return dispose
     }),
   }
-  return { ctx, definitionDispose, effects, locale, localeDispose, registrations, slotControllers, slots, uiConversation }
+  return { ctx, definitionDispose, effects, eventDisposers, locale, localeDispose, on, registrations, slotControllers, slots, uiConversation }
 }
 
 afterEach(() => {
@@ -74,10 +81,12 @@ describe('Settings client plugin', () => {
     expect(fixture.locale.register).toHaveBeenCalledWith('dsh-notice-hooks', expect.objectContaining({ en: expect.any(Object), zh: expect.any(Object) }))
     expect(fixture.slots.inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
     expect(fixture.slots.inject).toHaveBeenCalledWith('conversation.chat.node', expect.any(Function))
+    expect(fixture.slots.inject).toHaveBeenCalledWith('conversation.input.left', expect.any(Function))
+    expect(fixture.slots.inject).toHaveBeenCalledWith('shell.overlay', expect.any(Function))
     expect(fixture.uiConversation.events.register).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'dsh-notice-hooks.dispatch', target: 'chat',
     }))
-    expect(fixture.registrations).toHaveLength(2)
+    expect(fixture.registrations).toHaveLength(4)
     expect(fixture.registrations[0]?.options).toMatchObject({
       name: 'settings.section', id: 'dsh-notice-hooks', order: 30, locale: 'dsh-notice-hooks',
     })
@@ -85,6 +94,16 @@ describe('Settings client plugin', () => {
     expect(fixture.registrations[1]?.options).toMatchObject({
       name: 'conversation.chat.node', key: 'dsh-notice-hooks.dispatch', locale: 'dsh-notice-hooks',
     })
+    expect(fixture.registrations[2]?.options).toMatchObject({
+      name: 'conversation.input.left', id: 'dsh-notice-hooks-review', order: 20, locale: 'dsh-notice-hooks',
+    })
+    expect(fixture.registrations[3]?.options).toMatchObject({
+      name: 'shell.overlay', id: 'dsh-notice-hooks-review', order: 30, locale: 'dsh-notice-hooks',
+    })
+    const buttonFace = (fixture.registrations[2]?.options.inject as (sessionId: string) => { hooks: { hookReview: unknown } })('session-1')
+    const dialogFace = (fixture.registrations[3]?.options.inject as () => { hooks: { hookReview: unknown } })()
+    expect(buttonFace.hooks.hookReview).toBe(dialogFace.hooks.hookReview)
+    expect(fixture.on).toHaveBeenCalledWith('connection/reset', expect.any(Function))
     expect(en.sectionLabel).toBe('Hooks setting')
     expect(zh.sectionLabel).toBe('Hooks 设置')
     expect(en.title).toBe('Hooks setting')
@@ -108,6 +127,8 @@ describe('Settings client plugin', () => {
     expect(document.getElementById('dsh-notice-hooks-style')).toBe(secondStyle)
     expect(first.registrations[0]?.dispose).toHaveBeenCalledOnce()
     expect(first.registrations[1]?.dispose).toHaveBeenCalledOnce()
+    expect(first.registrations[2]?.dispose).toHaveBeenCalledOnce()
+    expect(first.registrations[3]?.dispose).toHaveBeenCalledOnce()
     expect(first.definitionDispose).toHaveBeenCalledOnce()
     expect(first.localeDispose).toHaveBeenCalledOnce()
 
@@ -116,6 +137,8 @@ describe('Settings client plugin', () => {
     expect(document.getElementById('dsh-notice-hooks-style')).toBeNull()
     expect(second.registrations[0]?.dispose).toHaveBeenCalledOnce()
     expect(second.registrations[1]?.dispose).toHaveBeenCalledOnce()
+    expect(second.registrations[2]?.dispose).toHaveBeenCalledOnce()
+    expect(second.registrations[3]?.dispose).toHaveBeenCalledOnce()
     expect(second.definitionDispose).toHaveBeenCalledOnce()
   })
 })

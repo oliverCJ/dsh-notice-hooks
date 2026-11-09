@@ -74,7 +74,8 @@ function createManager(store: HookConfigStore, scopeId = 'user'): HookScopeManag
       enabled: false,
       authorizationReason: 'not-approved' as const,
     })),
-    updateHookEnabled: vi.fn(async (binding, id, enabled, revision) => binding.store.setEnabled(id, enabled, revision)),
+    updateHookConfiguredEnabled: vi.fn(async (binding, id, enabled, revision) => binding.store.setEnabled(id, enabled, revision)),
+    updateHookAuthorization: vi.fn(async (binding) => binding.store.reload()),
     dispose: vi.fn(async () => undefined),
   }
 }
@@ -154,49 +155,64 @@ describe('hook settings HTTP API', () => {
     })
   })
 
-  it('reloads and updates one hook using revision compare-and-swap', async () => {
-    const fixture = await listen()
+  it('reloads and independently updates Hook configuration and authorization', async () => {
+    const store = createStore()
+    const manager = createManager(store)
+    const fixture = await listen(manager)
     servers.push(fixture.server)
 
     const reloaded = await fetch(`${fixture.base}/dsh-notice-hooks/reload`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'user' }),
     })
     expect(reloaded.status).toBe(200)
-    expect(fixture.store.reload).toHaveBeenCalledOnce()
-    expect((await reloaded.json()).value.hooks[0]).toMatchObject({
-      configuredEnabled: true, authorized: false, enabled: false, authorizationReason: 'not-approved',
-    })
+    expect(store.reload).toHaveBeenCalledOnce()
 
-    const updated = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/enabled`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+    const configured = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/configured-enabled`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled: false, revision: 3 }),
     })
-    expect(updated.status).toBe(200)
-    expect(fixture.store.setEnabled).toHaveBeenCalledWith('notify', false, 3)
-    expect((await updated.json()).value.hooks[0]).toMatchObject({
-      configuredEnabled: false, authorized: false, enabled: false, authorizationReason: 'not-approved',
+    expect(configured.status).toBe(200)
+    expect(manager.updateHookConfiguredEnabled).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ id: 'user' }) }), 'notify', false, 3)
+
+    const authorized = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/authorization`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ authorized: false, revision: 3 }),
     })
+    expect(authorized.status).toBe(200)
+    expect(manager.updateHookAuthorization).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ id: 'user' }) }), 'notify', false, 3)
   })
 
   it('maps malformed input, unknown hooks, and stale revisions to stable errors', async () => {
     const store = createStore()
-    vi.mocked(store.setEnabled).mockRejectedValueOnce(Object.assign(new Error('changed'), { name: 'HookConfigConflictError' }))
-    const fixture = await listen(store)
+    const manager = createManager(store)
+    vi.mocked(manager.updateHookConfiguredEnabled).mockRejectedValueOnce(Object.assign(new Error('changed'), { name: 'HookConfigConflictError' }))
+    const fixture = await listen(manager)
     servers.push(fixture.server)
 
-    const malformed = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/enabled`, {
+    const malformed = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/configured-enabled`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{',
     })
     expect(malformed.status).toBe(400)
     expect(await malformed.json()).toEqual({ ok: false, error: { code: 'invalid_request', message: 'Invalid request.' } })
 
-    const unknown = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/missing/enabled`, {
+    const invalidAuthorization = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/authorization`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: true, revision: 3 }),
+    })
+    expect(invalidAuthorization.status).toBe(400)
+
+    const unknown = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/missing/authorization`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorized: true, revision: 3 }),
     })
     expect(unknown.status).toBe(404)
 
-    const stale = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/enabled`, {
+    vi.mocked(manager.updateHookAuthorization).mockRejectedValueOnce(Object.assign(new Error('disabled'), { name: 'HookNotConfiguredEnabledError' }))
+    const disabled = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/authorization`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ authorized: true, revision: 3 }),
+    })
+    expect(disabled.status).toBe(409)
+    expect(await disabled.json()).toEqual({ ok: false, error: { code: 'hook_not_configured_enabled', message: 'Enable the Hook configuration before authorizing it.' } })
+
+    const stale = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/configured-enabled`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: false, revision: 3 }),
     })
     expect(stale.status).toBe(409)
@@ -211,10 +227,10 @@ describe('hook settings HTTP API', () => {
     expect((await fetch(`${fixture.base}/dsh-notice-hooks/reload`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'x'.repeat(5000) }),
     })).status).toBe(413)
-    expect((await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/missing/enabled`, {
+    expect((await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/missing/authorization`, {
       method: 'PUT', body: '{}',
     })).status).toBe(415)
-    expect((await fetch(`${fixture.base}/dsh-notice-hooks/scopes/workspace%3Amissing/hooks/missing/enabled`, {
+    expect((await fetch(`${fixture.base}/dsh-notice-hooks/scopes/workspace%3Amissing/hooks/missing/configured-enabled`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ data: 'x'.repeat(5000) }),
     })).status).toBe(413)
     expect((await fetch(`${fixture.base}/dsh-notice-hooks/status`, { headers: { origin: 'https://example.com' } })).status).toBe(403)
@@ -261,11 +277,12 @@ describe('hook settings HTTP API', () => {
     expect(projectStore.reload).toHaveBeenCalledOnce()
     expect(userStore.reload).not.toHaveBeenCalled()
 
-    const updated = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/workspace%3Aproject-a/hooks/notify/enabled`, {
+    const updated = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/workspace%3Aproject-a/hooks/notify/configured-enabled`, {
       method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ enabled: false, revision: 7 }),
     })
     expect(updated.status).toBe(200)
+    expect(manager.updateHookConfiguredEnabled).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ id: 'workspace:project-a' }) }), 'notify', false, 7)
     expect(projectStore.setEnabled).toHaveBeenCalledWith('notify', false, 7)
     expect(userStore.setEnabled).not.toHaveBeenCalled()
     expect(statusValue.hooks[0].stats).toEqual({ running: 4, skipped: 5, errors: 6, lastStatus: 'completed' })
@@ -283,7 +300,10 @@ describe('hook settings HTTP API', () => {
     expect((await fetch(`${fixture.base}/dsh-notice-hooks/reload`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     })).status).toBe(400)
-    expect((await fetch(`${fixture.base}/dsh-notice-hooks/hooks/notify/enabled`, {
+    expect((await fetch(`${fixture.base}/dsh-notice-hooks/hooks/notify/configured-enabled`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: false, revision: 3 }),
+    })).status).toBe(404)
+    expect((await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/hooks/notify/enabled`, {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: false, revision: 3 }),
     })).status).toBe(404)
     expect((await fetch(`${fixture.base}/dsh-notice-hooks/status?scope=workspace%3Amissing`)).status).toBe(404)

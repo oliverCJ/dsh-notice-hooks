@@ -79,6 +79,6 @@ describe('Client bundle artifact', () => {
     expect(source).toContain('overflow-wrap: anywhere')
     expect(source).toContain('var(--dsw-alias-label-tertiary)')
     expect(source).not.toContain('var(--dsw-alias-state-success-primary)')
-    expect(source).not.toContain('var(--dsw-alias-state-warn-primary)')
+    expect(source).toContain('.dnh-dispatch-event, .dnh-dispatch-triggered, .dnh-dispatch-blocked {\\n  color: inherit;')
   })
 })

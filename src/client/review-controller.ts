@@ -1,3 +1,4 @@
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import { HookApiError, type HookApi, type HookStatus, type HookView } from './api.js'
 
 export interface HookReviewItem {
@@ -22,7 +23,7 @@ export interface HookReviewSnapshot {
   readonly dialog: HookReviewDialogSnapshot | null
 }
 
-export interface HookReviewSource {
+export interface HookReviewSource extends HostObservable<HookReviewSnapshot> {
   getSnapshot(): HookReviewSnapshot
   subscribe(listener: () => void): () => void
 }
@@ -74,13 +75,15 @@ function defaultSchedule(callback: () => void, delay: number): () => void {
 
 export class HookReviewController {
   readonly source: HookReviewSource
+  readonly clientApi: HookApi
   private readonly listeners = new Set<() => void>()
   private readonly byScope: Record<string, HookStatus> = {}
   private readonly loading = new Set<string>()
   private readonly errors: Record<string, string> = {}
   private readonly generations = new Map<string, number>()
   private readonly retained = new Map<string, readonly string[]>()
-  private readonly api: HookApi
+  private readonly updateSerial = new Map<string, Promise<void>>()
+  private readonly remoteApi: HookApi
   private readonly schedule: Schedule
   private snapshot: HookReviewSnapshot
   private dialog: HookReviewDialogSnapshot | null = null
@@ -89,12 +92,26 @@ export class HookReviewController {
   private disposed = false
 
   constructor(options: HookReviewControllerOptions) {
-    this.api = options.api
+    this.remoteApi = options.api
     this.schedule = options.schedule ?? defaultSchedule
     this.snapshot = this.buildSnapshot()
+    const accepted = (operation: () => Promise<HookStatus>, scopeId: string) => this.enqueueScope(scopeId, async () => {
+      const status = await operation()
+      this.accept(status)
+      return status
+    })
+    this.clientApi = {
+      scopes: () => this.remoteApi.scopes(),
+      status: scopeId => accepted(() => this.remoteApi.status(scopeId), scopeId),
+      reload: scopeId => accepted(() => this.remoteApi.reload(scopeId), scopeId),
+      setConfiguredEnabled: (scopeId, id, enabled, revision) => accepted(
+        () => this.remoteApi.setConfiguredEnabled(scopeId, id, enabled, revision), scopeId),
+      setAuthorized: (scopeId, id, authorized, revision) => accepted(
+        () => this.remoteApi.setAuthorized(scopeId, id, authorized, revision), scopeId),
+    }
     this.source = {
       getSnapshot: () => this.snapshot,
-      subscribe: (listener) => {
+      subscribe: (listener: () => void) => {
         if (this.disposed) return () => undefined
         this.listeners.add(listener)
         return () => this.listeners.delete(listener)
@@ -132,7 +149,7 @@ export class HookReviewController {
       delete this.errors[scopeId]
       this.publish()
       try {
-        const status = await this.api.status(scopeId)
+        const status = await this.enqueueScope(scopeId, () => this.remoteApi.status(scopeId))
         if (!this.current(scopeId, generation)) return
         this.byScope[scopeId] = status
         delete this.errors[scopeId]
@@ -152,8 +169,13 @@ export class HookReviewController {
 
   accept(status: HookStatus): void {
     if (this.disposed) return
-    this.byScope[status.scope.id] = status
-    delete this.errors[status.scope.id]
+    const scopeId = status.scope.id
+    const current = this.byScope[scopeId]
+    if (current !== undefined && status.revision < current.revision) return
+    this.generations.set(scopeId, (this.generations.get(scopeId) ?? 0) + 1)
+    this.loading.delete(scopeId)
+    this.byScope[scopeId] = status
+    delete this.errors[scopeId]
     this.publish()
   }
 
@@ -207,7 +229,7 @@ export class HookReviewController {
           break
         }
         try {
-          const next = await this.api.setEnabled(scopeId, item.hook.id, true, currentStatus.revision)
+          const next = await this.clientApi.setAuthorized(scopeId, item.hook.id, true, currentStatus.revision)
           this.accept(next)
           this.statusListener?.(next)
         } catch (error) {
@@ -247,9 +269,21 @@ export class HookReviewController {
     this.cancelPoll?.()
     this.cancelPoll = undefined
     this.retained.clear()
+    this.updateSerial.clear()
     this.statusListener = undefined
     for (const scopeId of this.generations.keys()) this.generations.set(scopeId, (this.generations.get(scopeId) ?? 0) + 1)
     this.listeners.clear()
+  }
+
+  private enqueueScope<T>(scopeId: string, operation: () => Promise<T>): Promise<T> {
+    const prior = this.updateSerial.get(scopeId) ?? Promise.resolve()
+    const result = prior.then(operation, operation)
+    const settled = result.then(() => undefined, () => undefined)
+    this.updateSerial.set(scopeId, settled)
+    void settled.then(() => {
+      if (this.updateSerial.get(scopeId) === settled) this.updateSerial.delete(scopeId)
+    })
+    return result
   }
 
   private activeScopes(): readonly string[] {

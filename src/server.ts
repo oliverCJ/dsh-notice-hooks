@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HookConfigConflictError } from './config-store.js'
 import type { HookConfigState } from './config-store.js'
-import type { HookScopeBinding, HookScopeManager } from './scope-manager.js'
+import { HookNotConfiguredEnabledError, type HookScopeBinding, type HookScopeManager } from './scope-manager.js'
 import type { HookRunner, HookStats } from './runner.js'
 
 const API_PATH = '/dsh-notice-hooks'
@@ -45,6 +45,11 @@ async function jsonBody(req: IncomingMessage): Promise<Record<string, unknown>> 
     if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('object required')
     return value as Record<string, unknown>
   } catch { throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' }) }
+}
+function hasExactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  const actual = Object.keys(value).sort()
+  const expected = [...keys].sort()
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index])
 }
 function decodeSegment(value: string): string {
   try { return decodeURIComponent(value) } catch { throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' }) }
@@ -105,15 +110,22 @@ export function createHookRequestHandler(manager: HookScopeManager, runner: Hook
         const binding = await manager.accessScope(scopeId); const state = await binding.store.reload()
         send(res, 200, { ok: true, value: scopeStatus(binding, manager, runner, state) }); return
       }
-      const match = path.match(/^\/dsh-notice-hooks\/scopes\/([^/]+)\/hooks\/([^/]+)\/enabled$/u)
+      const match = path.match(/^\/dsh-notice-hooks\/scopes\/([^/]+)\/hooks\/([^/]+)\/(configured-enabled|authorization)$/u)
       if (match !== null) {
         if (req.method !== 'PUT') return methodNotAllowed(res)
         const scopeId = decodeSegment(match[1] ?? ''); const id = decodeSegment(match[2] ?? '')
+        const operation = match[3]
         const body = await jsonBody(req)
-        if (typeof body.enabled !== 'boolean' || !Number.isSafeInteger(body.revision) || Number(body.revision) < 1) throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' })
+        const valueKey = operation === 'configured-enabled' ? 'enabled' : 'authorized'
+        if (!hasExactKeys(body, [valueKey, 'revision']) || typeof body[valueKey] !== 'boolean'
+          || !Number.isSafeInteger(body.revision) || Number(body.revision) < 1) {
+          throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' })
+        }
         const binding = await manager.accessScope(scopeId)
         if (!binding.store.state().hooks.some(hook => hook.id === id)) { fail(res, 404, 'hook_not_found', 'Hook was not found.'); return }
-        const state = await manager.updateHookEnabled(binding, id, body.enabled, Number(body.revision))
+        const state = operation === 'configured-enabled'
+          ? await manager.updateHookConfiguredEnabled(binding, id, Boolean(body.enabled), Number(body.revision))
+          : await manager.updateHookAuthorization(binding, id, Boolean(body.authorized), Number(body.revision))
         send(res, 200, { ok: true, value: scopeStatus(binding, manager, runner, state) }); return
       }
       fail(res, 404, 'not_found', 'Route was not found.')
@@ -121,6 +133,7 @@ export function createHookRequestHandler(manager: HookScopeManager, runner: Hook
       if (res.headersSent) return
       if (error instanceof RequestError) fail(res, error.status, error.apiError.code, error.apiError.message)
       else if (error instanceof HookConfigConflictError || (error instanceof Error && (error.name === 'HookConfigConflictError' || ('code' in error && error.code === 'REVISION_CONFLICT')))) fail(res, 409, 'revision_conflict', 'Configuration changed. Reload and try again.')
+      else if (error instanceof HookNotConfiguredEnabledError || (error instanceof Error && error.name === 'HookNotConfiguredEnabledError')) fail(res, 409, 'hook_not_configured_enabled', 'Enable the Hook configuration before authorizing it.')
       else if (error instanceof Error && error.message.startsWith('unknown hook scope:')) fail(res, 404, 'not_found', 'Scope was not found.')
       else fail(res, 500, 'internal_error', 'Hook configuration operation failed.')
     })

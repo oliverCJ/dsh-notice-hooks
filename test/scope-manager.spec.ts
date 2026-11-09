@@ -76,10 +76,19 @@ type OpenStore = (options?: OpenHookConfigStoreOptions) => Promise<HookConfigSto
 
 function memoryAuthorizations(initial: Array<[string, string, AuthorizationFingerprint]> = []): AuthorizationStore {
   const values = new Map(initial.map(([scopeId, hookId, fingerprint]) => [JSON.stringify([scopeId, hookId]), fingerprint]))
+  const pending = new Map<string, AuthorizationFingerprint>()
+  const key = (scopeId: string, hookId: string) => JSON.stringify([scopeId, hookId])
   return {
-    get: (scopeId, hookId) => values.get(JSON.stringify([scopeId, hookId])),
-    grant: vi.fn(async (scopeId, hookId, fingerprint) => { values.set(JSON.stringify([scopeId, hookId]), fingerprint) }),
-    revoke: vi.fn(async (scopeId, hookId) => { values.delete(JSON.stringify([scopeId, hookId])) }),
+    get: (scopeId, hookId) => values.get(key(scopeId, hookId)),
+    grant: vi.fn(async (scopeId, hookId, fingerprint) => { values.set(key(scopeId, hookId), fingerprint) }),
+    prepareGrant: vi.fn(async (scopeId, hookId, fingerprint) => { pending.set(key(scopeId, hookId), fingerprint) }),
+    commitGrant: vi.fn(async (scopeId, hookId, fingerprint) => {
+      if (pending.get(key(scopeId, hookId)) !== fingerprint) throw new Error('prepared authorization does not match')
+      pending.delete(key(scopeId, hookId))
+      values.set(key(scopeId, hookId), fingerprint)
+    }),
+    abortGrant: vi.fn(async (scopeId, hookId) => { pending.delete(key(scopeId, hookId)) }),
+    revoke: vi.fn(async (scopeId, hookId) => { pending.delete(key(scopeId, hookId)); values.delete(key(scopeId, hookId)) }),
   }
 }
 
@@ -698,24 +707,86 @@ describe('授权组合与 Settings 事务', () => {
     })
   })
 
-  it('启用授权写失败时只留下已声明但未授权的安全状态', async () => {
-    const configured = hook('notify', { enabled: false })
-    const store = mutableStore(configured)
+  it('启用配置只写声明，不授予执行权限', async () => {
+    const store = mutableStore(hook('notify', { enabled: false }))
     const authorizations = memoryAuthorizations()
-    vi.mocked(authorizations.grant).mockRejectedValueOnce(new Error('authorization write failed'))
     const manager = await managerWith(store, authorizations)
     const binding = await manager.accessScope('user')
 
-    await expect(manager.updateHookEnabled(binding, 'notify', true, 3)).rejects.toThrow('authorization write failed')
+    const state = await manager.updateHookConfiguredEnabled(binding, 'notify', true, 3)
 
-    const current = store.state().hooks[0]!
-    expect(current.enabled).toBe(true)
-    expect(manager.scopeHook(binding, current)).toMatchObject({ configuredEnabled: true, authorized: false, enabled: false })
-    expect(vi.mocked(store.setEnabled).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(authorizations.grant).mock.invocationCallOrder[0]!)
+    expect(state).toMatchObject({ revision: 4, hooks: [{ id: 'notify', enabled: true }] })
+    expect(store.setEnabled).toHaveBeenCalledWith('notify', true, 3)
+    expect(authorizations.grant).not.toHaveBeenCalled()
+    expect(authorizations.revoke).not.toHaveBeenCalled()
+    expect(manager.scopeHook(binding, state.hooks[0]!)).toMatchObject({ configuredEnabled: true, authorized: false, enabled: false })
+  })
+
+  it('禁用配置先撤销授权，配置写失败也不会保留有效权限', async () => {
+    const configured = hook('notify', { enabled: true })
+    const store = mutableStore(configured)
+    vi.mocked(store.setEnabled).mockRejectedValueOnce(new Error('config write failed'))
+    const authorizations = memoryAuthorizations([['user', 'notify', fingerprintHook('user', configured)]])
+    const manager = await managerWith(store, authorizations)
+    const binding = await manager.accessScope('user')
+
+    await expect(manager.updateHookConfiguredEnabled(binding, 'notify', false, 3)).rejects.toThrow('config write failed')
+
+    expect(authorizations.get('user', 'notify')).toBeUndefined()
+    expect(manager.scopeHook(binding, configured)).toMatchObject({ configuredEnabled: true, authorized: false, enabled: false })
+    expect(vi.mocked(authorizations.revoke).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(store.setEnabled).mock.invocationCallOrder[0]!)
+  })
+
+  it('撤销授权不写配置并保持 revision 与配置启用状态', async () => {
+    const configured = hook('notify', { enabled: true })
+    const store = mutableStore(configured)
+    const authorizations = memoryAuthorizations([['user', 'notify', fingerprintHook('user', configured)]])
+    const manager = await managerWith(store, authorizations)
+    const binding = await manager.accessScope('user')
+
+    const state = await manager.updateHookAuthorization(binding, 'notify', false, 3)
+
+    expect(state).toBe(store.state())
+    expect(state.revision).toBe(3)
+    expect(store.setEnabled).not.toHaveBeenCalled()
+    expect(authorizations.revoke).toHaveBeenCalledWith('user', 'notify')
+    expect(manager.scopeHook(binding, configured)).toMatchObject({ configuredEnabled: true, authorized: false, enabled: false })
+  })
+
+  it('只为已启用配置授权当前指纹且不写配置', async () => {
+    const configured = hook('notify', { enabled: true })
+    const store = mutableStore(configured)
+    const authorizations = memoryAuthorizations()
+    const manager = await managerWith(store, authorizations)
+    const binding = await manager.accessScope('user')
+
+    const state = await manager.updateHookAuthorization(binding, 'notify', true, 3)
+
+    expect(state.revision).toBe(3)
+    expect(store.setEnabled).not.toHaveBeenCalled()
+    expect(authorizations.prepareGrant).toHaveBeenCalledWith('user', 'notify', fingerprintHook('user', configured))
+    expect(authorizations.commitGrant).toHaveBeenCalledWith('user', 'notify', fingerprintHook('user', configured))
+    expect(manager.scopeHook(binding, configured)).toMatchObject({ configuredEnabled: true, authorized: true, enabled: true })
+  })
+
+  it('最终复核与 pending 清理都失败时仍不暴露未提交授权', async () => {
+    const configured = hook('notify', { enabled: true })
+    const store = mutableStore(configured)
+    vi.mocked(store.reload)
+      .mockImplementationOnce(async () => store.state())
+      .mockRejectedValueOnce(new Error('final reload failed'))
+    const authorizations = memoryAuthorizations()
+    vi.mocked(authorizations.abortGrant).mockRejectedValueOnce(new Error('cleanup failed'))
+    const manager = await managerWith(store, authorizations)
+    const binding = await manager.accessScope('user')
+
+    await expect(manager.updateHookAuthorization(binding, 'notify', true, 3)).rejects.toThrow()
+
+    expect(authorizations.get('user', 'notify')).toBeUndefined()
   })
 
   it('授权写入后的最终配置重读失败时撤销刚授予的权限', async () => {
-    const configured = hook('notify', { enabled: false })
+    const configured = hook('notify', { enabled: true })
     const store = mutableStore(configured)
     vi.mocked(store.reload)
       .mockImplementationOnce(async () => store.state())
@@ -724,45 +795,23 @@ describe('授权组合与 Settings 事务', () => {
     const manager = await managerWith(store, authorizations)
     const binding = await manager.accessScope('user')
 
-    await expect(manager.updateHookEnabled(binding, 'notify', true, 3)).rejects.toThrow('final reload failed')
+    await expect(manager.updateHookAuthorization(binding, 'notify', true, 3)).rejects.toThrow('final reload failed')
 
     expect(authorizations.get('user', 'notify')).toBeUndefined()
-    expect(authorizations.revoke).toHaveBeenCalledWith('user', 'notify')
-    expect(vi.mocked(authorizations.grant).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(authorizations.revoke).mock.invocationCallOrder[0]!)
+    expect(authorizations.abortGrant).toHaveBeenCalledWith('user', 'notify')
+    expect(authorizations.commitGrant).not.toHaveBeenCalled()
+    expect(vi.mocked(authorizations.prepareGrant).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(authorizations.abortGrant).mock.invocationCallOrder[0]!)
   })
 
-  it('禁用先撤销授权，配置写失败也不会保留有效权限', async () => {
-    const configured = hook('notify', { enabled: true })
-    const fingerprint = fingerprintHook('user', configured)
-    const store = mutableStore(configured)
-    vi.mocked(store.setEnabled).mockRejectedValueOnce(new Error('config write failed'))
-    const authorizations = memoryAuthorizations([['user', 'notify', fingerprint]])
-    const manager = await managerWith(store, authorizations)
-    const binding = await manager.accessScope('user')
-
-    await expect(manager.updateHookEnabled(binding, 'notify', false, 3)).rejects.toThrow('config write failed')
-
-    expect(authorizations.get('user', 'notify')).toBeUndefined()
-    expect(manager.scopeHook(binding, configured)).toMatchObject({ configuredEnabled: true, authorized: false, enabled: false })
-    expect(vi.mocked(authorizations.revoke).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(store.setEnabled).mock.invocationCallOrder[0]!)
-  })
-
-  it('配置在授权前变化时返回冲突且不授权旧指纹或新定义', async () => {
-    const configured = hook('notify', { enabled: false })
-    const store = mutableStore(configured)
-    const originalSetEnabled = store.setEnabled
-    vi.mocked(store.reload).mockImplementationOnce(async () => {
-      store.replace({ ...store.state().hooks[0]!, command: '/bin/external' })
-      return store.state()
-    })
+  it('拒绝 stale revision、未知 Hook 与禁用配置授权', async () => {
+    const store = mutableStore(hook('notify', { enabled: false }))
     const authorizations = memoryAuthorizations()
     const manager = await managerWith(store, authorizations)
     const binding = await manager.accessScope('user')
 
-    await expect(manager.updateHookEnabled(binding, 'notify', true, 3)).rejects.toBeInstanceOf(HookConfigConflictError)
-
-    expect(originalSetEnabled).toHaveBeenCalledWith('notify', true, 3)
+    await expect(manager.updateHookAuthorization(binding, 'notify', true, 2)).rejects.toBeInstanceOf(HookConfigConflictError)
+    await expect(manager.updateHookAuthorization(binding, 'missing', true, 3)).rejects.toThrow('hook id not found: missing')
+    await expect(manager.updateHookAuthorization(binding, 'notify', true, 3)).rejects.toThrow('hook is not configured enabled: notify')
     expect(authorizations.grant).not.toHaveBeenCalled()
-    expect(authorizations.get('user', 'notify')).toBeUndefined()
   })
 })
