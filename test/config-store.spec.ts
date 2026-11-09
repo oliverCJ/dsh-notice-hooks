@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { FSWatcher } from 'node:fs'
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HookConfigConflictError,
@@ -147,6 +147,25 @@ describe('loading and fail-closed state', () => {
 })
 
 describe('parent-directory watching', () => {
+  it('rechecks an ancestor watcher when directory creation events are lost', async () => {
+    const testHome = await home()
+    const path = resolveHookConfigPath(testHome)
+    const watched: string[] = []
+    const store = await openWithWatch({ path, createIfMissing: false }, {
+      watch(target) {
+        watched.push(target)
+        return new ControlledWatcher() as unknown as FSWatcher
+      },
+    })
+    stores.push(store)
+    expect(watched).toEqual([testHome])
+
+    await save(testHome, document('created-without-event'))
+
+    await expect.poll(() => watched.includes(dirname(path)), { timeout: 1_000 }).toBe(true)
+    await expect.poll(() => store.state().hooks[0]?.id, { timeout: 1_000 }).toBe('created-without-event')
+  })
+
   it('observes project config creation, edits, atomic replacement, and deletion', async () => {
     const testHome = await home()
     const path = resolveHookConfigPath(testHome)

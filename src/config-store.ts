@@ -301,7 +301,11 @@ export async function openHookConfigStore(
     }
     if (disposed) return
     if (watcher !== undefined && watchedDirectory === directory) {
-      watchRetryAttempt = 0
+      if (directory === dirname(path)) {
+        watchRetryAttempt = 0
+      } else {
+        scheduleWatcherRetry()
+      }
       return
     }
 
@@ -321,6 +325,8 @@ export async function openHookConfigStore(
       watchRetryTimer = undefined
       current.on('error', () => handleWatcherFailure(current))
       current.on('close', () => handleWatcherFailure(current))
+      scheduleReload()
+      if (directory !== dirname(path)) scheduleWatcherRetry()
     } catch {
       scheduleReload()
       scheduleWatcherRetry()
