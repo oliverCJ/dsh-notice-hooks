@@ -38,7 +38,7 @@ pnpm pack
 Install the generated tarball into a non-Desktop profile, replacing the version when necessary:
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.0.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.1.tgz
 ```
 
 Packing is preferred to installing the source directory because it validates the same file set used by npm. If you do install a local directory, run `pnpm run build` first because the runtime entry points are under `lib/`.
@@ -54,6 +54,8 @@ Packing is preferred to installing the source directory because it validates the
 | custom | Profile-specific plugin manager | Conditional | Conditional | Host Hooks require Session lifecycle services. Settings additionally requires the Web server and compatible locale, renderer, and Settings client services. |
 
 `workspaceRegistry` is optional. When it is available, the plugin exposes registered project scopes; when it is absent or invalid, the plugin continues with the user scope only. The Bundle does not insert a fallback workspace provider and never infers a trusted project scope from an arbitrary Session `cwd`.
+
+The Session plugin-record runtime is also optional at activation. If the profile cannot resolve the Harness-owned `@deepseek-ai/dsh-session` module, Hooks, authorization, and Settings continue normally; only the compact Chat activity rows are disabled, with one Host warning. The plugin never installs a second Session runtime to fill this gap.
 
 After installation, enable `dsh-notice-hooks`. The Settings navigation label and page title are both **Hooks setting** in English and **Hooks 设置** in Simplified Chinese.
 

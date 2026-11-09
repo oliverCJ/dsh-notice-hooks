@@ -49,7 +49,7 @@ describe('release documentation', () => {
       expect(readme).toContain('pnpm pack')
       expect(readme).toContain('--registry=https://registry.npmjs.org/')
       expect(readme).toContain('--registry=https://registry.npmmirror.com')
-      expect(readme).toContain('dsh-notice-hooks-0.1.0.tgz')
+      expect(readme).toContain('dsh-notice-hooks-0.1.1.tgz')
     }
   })
 

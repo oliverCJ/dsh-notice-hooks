@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
-import { appendHookDispatchNotice, collectHookDispatch } from './dispatch-notice.js'
+import { appendHookDispatchNotice, collectHookDispatch, type AppendPluginRecord } from './dispatch-notice.js'
 import { classifySessionEvent, cleanupSessionEventState, sessionCreatedInvocation, sessionDisposedInvocation } from './events.js'
 import { createHookRunner } from './runner.js'
 import { createHookScopeManager } from './scope-manager.js'
@@ -11,6 +11,23 @@ import type { HookInvocation, SessionLike } from './types.js'
 
 export const name = 'dsh-notice-hooks'
 export const inject: string[] = []
+
+type SessionRuntimeImporter = () => Promise<unknown>
+
+export async function loadAppendPluginRecord(
+  importer: SessionRuntimeImporter = () => import('@deepseek-ai/dsh-session'),
+  warn: (message: string) => void = message => console.warn(message),
+): Promise<AppendPluginRecord | undefined> {
+  try {
+    const runtime = await importer()
+    if (typeof runtime !== 'object' || runtime === null || !('appendPluginRecord' in runtime)
+      || typeof runtime.appendPluginRecord !== 'function') throw new Error('appendPluginRecord export is unavailable')
+    return runtime.appendPluginRecord as AppendPluginRecord
+  } catch {
+    warn('[dsh-notice-hooks] Session plugin-record runtime is unavailable; Chat activity rows are disabled.')
+    return undefined
+  }
+}
 function isWorkspaceRegistryLike(value: unknown): value is WorkspaceRegistryLike { return typeof value === 'object' && value !== null && 'get' in value && typeof value.get === 'function' && 'list' in value && typeof value.list === 'function' && 'resolveByPath' in value && typeof value.resolveByPath === 'function' }
 function isHookWebServer(value: unknown): value is HookWebServer { return typeof value === 'object' && value !== null && 'register' in value && typeof value.register === 'function' && 'getOrigin' in value && typeof value.getOrigin === 'function' }
 function keyOf(session: SessionLike): string { return String(session.id) }
@@ -19,6 +36,7 @@ function cwdOf(session: SessionLike): string | undefined { return typeof session
 /** Activates command Hooks for Harness session lifecycle events. */
 export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const logger = ctx.logger(name)
+  const appendRecord = await loadAppendPluginRecord(undefined, message => { try { logger.warn(message) } catch { /* isolated */ } })
   const workspaceRegistry: unknown = ctx.get('workspaceRegistry')
   const manager = await createHookScopeManager(isWorkspaceRegistryLike(workspaceRegistry) ? { workspaceRegistry } : {})
   const runner = createHookRunner({ logger: { warn(message, error) { try { logger.warn(message, error) } catch { /* isolated */ } } } })
@@ -70,7 +88,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       try { void runner.run(scoped.runtimeId, scoped.hook, invocation.payload).catch(error => warn(`[dsh-notice-hooks] ${scoped.runtimeId} execution failed`, error)) }
       catch (error) { warn(`[dsh-notice-hooks] ${scoped.runtimeId} execution failed`, error) }
     }
-    try { appendHookDispatchNotice(session, decision.notice) }
+    try { appendHookDispatchNotice(session, decision.notice, appendRecord) }
     catch (error) { warn('[dsh-notice-hooks] failed to append Hook dispatch notice', error) }
   }
   async function release(session: SessionLike): Promise<void> {

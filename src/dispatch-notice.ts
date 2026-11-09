@@ -1,4 +1,3 @@
-import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import {
   HOOK_DISPATCH_RECORD,
@@ -18,6 +17,12 @@ export type {
   HookDispatchNotice,
   HookDispatchReference,
 } from './dispatch-contract.js'
+
+export type AppendPluginRecord = (
+  session: Session,
+  type: typeof HOOK_DISPATCH_RECORD,
+  data: HookDispatchNotice,
+) => SessionSeq
 
 export interface HookDispatchDecision {
   readonly admitted: readonly ScopedHook[]
@@ -69,7 +74,8 @@ export function collectHookDispatch(
 export function appendHookDispatchNotice(
   session: Session,
   notice: HookDispatchNotice | undefined,
+  appendRecord?: AppendPluginRecord,
 ): SessionSeq | undefined {
-  if (notice === undefined || notice.event === 'SessionEnd') return undefined
-  return appendPluginRecord(session, HOOK_DISPATCH_RECORD, notice)
+  if (notice === undefined || notice.event === 'SessionEnd' || appendRecord === undefined) return undefined
+  return appendRecord(session, HOOK_DISPATCH_RECORD, notice)
 }

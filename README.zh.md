@@ -38,7 +38,7 @@ pnpm pack
 把生成的 tarball 安装到非 Desktop profile，版本变化时相应替换文件名：
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.0.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.1.tgz
 ```
 
 推荐安装 tarball，因为它会验证与 npm 发布相同的文件集合。如果直接安装源码目录，必须先运行 `pnpm run build`，运行入口位于 `lib/`。
@@ -54,6 +54,8 @@ dsh plugin --profile web add ./dsh-notice-hooks-0.1.0.tgz
 | 自定义 | profile 对应的插件管理方式 | 有条件支持 | 有条件支持 | Host Hooks 需要 Session 生命周期服务；Settings 还需要 Web server 及兼容的 locale、renderer、Settings client 服务。 |
 
 `workspaceRegistry` 是可选服务。服务存在时插件公开已注册项目作用域；服务缺失或无效时，插件继续以纯用户作用域运行。Bundle 不再插入 fallback workspace provider，也不会把任意 Session `cwd` 推断为可信项目作用域。
+
+Session plugin-record runtime 在激活时同样是可选能力。若 profile 无法解析 Harness 自己持有的 `@deepseek-ai/dsh-session` 模块，Hook 执行、授权和 Settings 仍正常工作；只有紧凑 Chat 活动行关闭，并记录一次 Host warning。插件不会为此安装第二份 Session runtime。
 
 安装后启用 `dsh-notice-hooks`。Settings 导航和页面标题在中文界面显示为 `Hooks 设置`，在英文界面显示为 `Hooks setting`。
 

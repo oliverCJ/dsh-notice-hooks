@@ -1,4 +1,4 @@
-import { Session, SessionId, pluginRecordOf } from '@deepseek-ai/dsh-session'
+import { appendPluginRecord, Session, SessionId, pluginRecordOf } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import { parseHookConfig } from '../src/config.js'
 import {
@@ -123,7 +123,7 @@ describe('official Session plugin record', () => {
     const session = Session.create(SessionId('session-1'))
     const decision = collectHookDispatch(invocation(), [scopedHook('user', resolvedHook('notify'))])
 
-    expect(appendHookDispatchNotice(session, decision.notice)).toBe(0)
+    expect(appendHookDispatchNotice(session, decision.notice, appendPluginRecord)).toBe(0)
     const events = session.snapshotEvents()
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ type: HOOK_DISPATCH_RECORD, ignorable: true, data: decision.notice })
@@ -135,10 +135,12 @@ describe('official Session plugin record', () => {
     expect(restored.surface.nodes).toEqual([])
   })
 
-  it('does not append empty or SessionEnd notices', () => {
+  it('does not append without runtime capability or for empty and SessionEnd notices', () => {
     const session = Session.create(SessionId('session-1'))
-    expect(appendHookDispatchNotice(session, undefined)).toBeUndefined()
-    expect(appendHookDispatchNotice(session, { event: 'SessionEnd', triggered: [{ scope: 'user', id: 'cleanup' }], blocked: [] })).toBeUndefined()
+    const notice = { event: 'Stop' as const, triggered: [{ scope: 'user', id: 'notify' }], blocked: [] }
+    expect(appendHookDispatchNotice(session, notice)).toBeUndefined()
+    expect(appendHookDispatchNotice(session, undefined, appendPluginRecord)).toBeUndefined()
+    expect(appendHookDispatchNotice(session, { event: 'SessionEnd', triggered: [{ scope: 'user', id: 'cleanup' }], blocked: [] }, appendPluginRecord)).toBeUndefined()
     expect(session.snapshotEvents()).toEqual([])
   })
 })
