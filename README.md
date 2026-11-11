@@ -321,6 +321,6 @@ pnpm run build
 pnpm pack --dry-run
 ```
 
-Pull requests and pushes to `main` run the same frozen-lockfile checks in GitHub Actions and upload the coverage report to Codecov. Pushing a matching `v*` tag runs the checks again, creates a GitHub Release, and attaches a prebuilt `.tgz` for manual installation. The release workflow does not publish to npm automatically; npm publication remains a deliberate maintainer action.
+Pull requests and pushes to `main` run the same frozen-lockfile checks in GitHub Actions and upload the coverage report to Codecov. Pushing a numeric version tag such as `0.1.3` runs the checks again, creates a GitHub Release, and attaches a prebuilt `.tgz` for manual installation. The release workflow does not publish to npm automatically; npm publication remains a deliberate maintainer action.
 
 License: [MIT](./LICENSE).

@@ -17,9 +17,12 @@ describe('GitHub workflows', () => {
     expect(ci).toContain('pnpm/action-setup')
   })
 
-  it('builds and uploads a version-matching tarball for v tags without npm publish', () => {
+  it('builds and uploads a version-matching tarball for numeric tags without npm publish', () => {
     expect(release).toContain('tags:')
-    expect(release).toContain("'v*'")
+    expect(release).toContain("'[0-9]*'")
+    expect(release).not.toContain("'v*'")
+    expect(release).toContain('tag="$GITHUB_REF_NAME"')
+    expect(release).not.toContain('GITHUB_REF_NAME#v')
     expect(release).toContain('pnpm install --frozen-lockfile')
     expect(release).toContain('pnpm run check')
     expect(release).toContain('pnpm pack')

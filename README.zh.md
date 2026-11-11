@@ -321,6 +321,6 @@ pnpm run build
 pnpm pack --dry-run
 ```
 
-Pull Request 和推送到 `main` 会在 GitHub Actions 中使用 frozen lockfile 执行同样的检查，并把覆盖率报告上传到 Codecov。推送匹配的 `v*` tag 后，workflow 会再次检查、创建 GitHub Release，并上传可手工安装的 `.tgz`。Release workflow 不会自动发布 npm；npm 发布仍由维护者明确执行。
+Pull Request 和推送到 `main` 会在 GitHub Actions 中使用 frozen lockfile 执行同样的检查，并把覆盖率报告上传到 Codecov。推送 `0.1.3` 这类数字版本 tag 后，workflow 会再次检查、创建 GitHub Release，并上传可手工安装的 `.tgz`。Release workflow 不会自动发布 npm；npm 发布仍由维护者明确执行。
 
 许可证：[MIT](./LICENSE)。
