@@ -1,6 +1,6 @@
 {
   "name": "dsh-notice-hooks",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Configure automation Hooks for user and project scopes to run commands on session, tool, permission, and context-compaction events. Manage Hook authorization manually in Hooks setting.",
   "keywords": [
     "dsh",
@@ -17,6 +17,7 @@
     "type": "git",
     "url": "git+https://github.com/oliverCJ/dsh-notice-hooks.git"
   },
+  "author": "oliverCJ",
   "license": "MIT",
   "type": "module",
   "main": "./lib/index.js",
@@ -35,6 +36,7 @@
     "lib",
     "cordis.patch.yml",
     "examples",
+    "assets",
     "locale/*.json",
     "icon.svg",
     "README.md",
@@ -44,6 +46,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "check:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "build": "tsc -p tsconfig.json && tsdown",
@@ -85,6 +88,7 @@
     "react": "^18.3.1"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-native-command": "0.2.2-rc.1",
     "string-argv": "^0.3.2"
   },
   "devDependencies": {
@@ -95,17 +99,19 @@
     "@deepseek-ai/dsh-client-ui-conversation": "0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-layout": "0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "0.2.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-session": "0.2.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.2-rc.1",
     "@deepseek-ai/dsh-client-ui-workspace": "0.2.2-rc.1",
     "@deepseek-ai/dsh-session": "0.2.2-rc.1",
+    "@resvg/resvg-js": "2.6.2",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "16.3.0",
     "@tsdown/css": "^0.22.14",
     "@types/node": "^24.10.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@vitest/coverage-v8": "4.1.12",
     "jsdom": "27.2.0",
     "lucide-react": "0.468.0",
     "react": "^18.3.1",

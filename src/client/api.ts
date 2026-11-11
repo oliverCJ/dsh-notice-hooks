@@ -54,6 +54,7 @@ export interface HookApi {
   reload(scopeId: string): Promise<HookStatus>
   setConfiguredEnabled(scopeId: string, id: string, enabled: boolean, revision: number): Promise<HookStatus>
   setAuthorized(scopeId: string, id: string, authorized: boolean, revision: number): Promise<HookStatus>
+  openConfig?(scopeId: string): Promise<void>
 }
 
 export class HookApiError extends Error {
@@ -190,6 +191,11 @@ export function createHookApi(fetcher: Fetcher = globalThis.fetch.bind(globalThi
       return decode(await request(fetcher, `${API_PATH}/scopes/${encodeURIComponent(scopeId)}/hooks/${encodeURIComponent(id)}/authorization`, {
         method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ authorized, revision }),
       }), value => parseStatus(value, scopeId))
+    },
+    async openConfig(scopeId) {
+      await request(fetcher, `${API_PATH}/scopes/${encodeURIComponent(scopeId)}/open-config`, {
+        method: 'POST', headers: jsonHeaders,
+      })
     },
   }
 }

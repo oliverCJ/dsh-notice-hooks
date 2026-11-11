@@ -1,8 +1,35 @@
 # dsh-notice-hooks
 
+<p align="center">
+  <a href="README.zh.md">中文</a> | <a href="README.md">English</a>
+</p>
+
+<p align="center">
+  <img src="assets/icon-180.png" alt="dsh-notice-hooks" width="120" />
+</p>
+
+<p align="center">
+  Lifecycle command Hooks for DeepSeek Harness
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
+  <a href="https://app.codecov.io/gh/oliverCJ/dsh-notice-hooks"><img alt="Coverage" src="https://codecov.io/gh/oliverCJ/dsh-notice-hooks/branch/main/graph/badge.svg" /></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.3-blue.svg" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness-lightgrey.svg" />
+  <img alt="Built with" src="https://img.shields.io/badge/built%20with-TypeScript-3178C6.svg" />
+</p>
+
 Configure automation Hooks for user and project scopes to run commands on session, tool, permission, and context-compaction events. Manage Hook authorization manually in Hooks setting.
 
-[简体中文说明](./README.zh.md)
+## Highlights
+
+- **14 lifecycle events**: session, tool, permission, subagent, stop, and context-compaction events.
+- **User/project scopes**: user Hooks run before Hooks from the registered Workspace.
+- **Explicit authorization**: configuration enablement is separate from fingerprint-bound execution approval.
+- **Fail-closed execution**: unauthorized, changed, or invalid Hook definitions never start commands.
+- **One compact activity row**: one ignorable Chat row summarizes triggered and blocked Hooks.
+- **Optional CC Notice integration**: route events to desktop notifications, sounds, Webhooks, and hardware feedback.
 
 ## Requirements
 
@@ -45,6 +72,14 @@ These commands use the npm registry configured by the user. An optional mirror m
 
 `dsh-notice-hooks` provides lifecycle Hooks and explicit command authorization. Pair it with [CC Notice](https://github.com/oliverCJ/cc-notice) to turn DeepSeek Harness events into configurable desktop notifications, sounds, Webhooks, and hardware-device feedback. CC Notice includes DeepSeek Harness Hook setup; command authorization remains under your control in **Hooks setting**.
 
+## Settings preview
+
+The Hooks setting page shows every supported lifecycle event, configuration scope, command details, enable state, and fingerprint authorization state.
+
+<p align="center">
+  <img src="assets/hook-settings.png" alt="dsh-notice-hooks Settings page" width="900" />
+</p>
+
 ## Install from source
 
 ```sh
@@ -58,7 +93,7 @@ pnpm pack
 Install the generated tarball into a non-Desktop profile, replacing the version when necessary:
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.2.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.3.tgz
 ```
 
 Packing is preferred to installing the source directory because it validates the same file set used by npm. If you do install a local directory, run `pnpm run build` first because the runtime entry points are under `lib/`.
@@ -222,6 +257,8 @@ The Settings navigation label and page title are **Hooks setting** in English an
 
 The page always renders all 14 event groups in a fixed order, including during initial loading or when the service is unavailable. Controls remain disabled until status is available. Configured groups are expanded by default; empty groups stay compact but can be expanded. Reloading preserves expansion state independently for each scope. Every Hook has a configuration enable switch and a separate authorization action. Enabling a configuration leaves it unauthorized; revoking authorization keeps the switch on. Both states enter pending review. Disabling the configuration revokes authorization and suppresses review prompts. A selected scope with pending authorization shows a review banner and per-Hook status; its Review action opens the same authorization dialog used by the current session. The composer shows a compact review icon only when the current session's user or project scope has configured-but-unauthorized Hooks. The dialog displays command, matcher, timeout, concurrency, scope, and fingerprint-change status before the user explicitly authorizes selected or all currently shown Hooks. These actions never authorize future Hooks or changed fingerprints. Expanded Settings details continue to show the command, matcher, timeout, concurrency limit, authorization state, recent aggregate status, and public scope.
 
+The configuration path has an open-file button that asks the Host to open the verified scope file with the platform's default associated editor; the Client never sends an arbitrary filesystem path.
+
 Scope switching, reloads, and revision-conflict recovery reject stale responses, so a late response from an old scope cannot overwrite the current page. If a workspace is removed from the registry, the page falls back to the user scope and shows a localized notice. A missing project configuration shows an empty state without creating files. The page also reports the configuration path, invalid configuration, and service availability, but it is not a raw JSON editor.
 
 Configuration writes use revision and content-hash checks, reject symlinks and non-regular files, and replace the file atomically in the same directory. An external edit detected before replacement is rejected. Portable Node.js filesystem APIs do not provide conditional rename, so an uncooperative writer changing the file between the final hash check and rename remains a narrow race.
@@ -273,12 +310,17 @@ The file may have changed after the page loaded, or it may not be a safe regular
 
 ## Development and release checks
 
+Local checks:
+
 ```sh
 pnpm run typecheck
 pnpm run typecheck:test
 pnpm run test
+pnpm run check:coverage
 pnpm run build
 pnpm pack --dry-run
 ```
+
+Pull requests and pushes to `main` run the same frozen-lockfile checks in GitHub Actions and upload the coverage report to Codecov. Pushing a matching `v*` tag runs the checks again, creates a GitHub Release, and attaches a prebuilt `.tgz` for manual installation. The release workflow does not publish to npm automatically; npm publication remains a deliberate maintainer action.
 
 License: [MIT](./LICENSE).

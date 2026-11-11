@@ -63,6 +63,7 @@ async function boot(
   const ctx = new Context()
   contexts.push(ctx)
   if (workspaceRegistry !== null) ctx.provide('workspaceRegistry', workspaceRegistry as never)
+  ctx.provide('sessionController', { openWorkspacePath: vi.fn(async () => ({ opened: true as const })) } as never)
   if (webServer !== undefined) ctx.provide('webServer', webServer as never)
   const fiber = ctx.plugin(NoticeHooks)
   await fiber.await()
@@ -445,7 +446,7 @@ describe('Cordis host composition', () => {
     emit(ctx, 'session/event', { id: `user-only-${_name}`, header: { cwd } }, {
       type: 'turn/end', data: { reason: { kind: 'complete' } },
     })
-    await new Promise(resolve => setTimeout(resolve, 100))
+    await eventually(async () => JSON.stringify(await readStatus()).includes('"lastStatus":"completed"'))
     expect(await readStatus()).toMatchObject({ ok: true, value: { hooks: [{ stats: { lastStatus: 'completed' } }] } })
     await eventually(async () => (await readFile(output, 'utf8')).trim() === 'Stop')
   })

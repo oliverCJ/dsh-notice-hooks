@@ -1,5 +1,6 @@
 import ChevronDown from 'lucide-react/dist/esm/icons/chevron-down.js'
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js'
+import ExternalLink from 'lucide-react/dist/esm/icons/external-link.js'
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
@@ -9,7 +10,7 @@ import type { MessageKey } from './i18n.js'
 import type { HookReviewSnapshot } from './review-controller.js'
 
 const css = {
-  actionError: 'dnh-action-error', authorizationAction: 'dnh-authorization-action', command: 'dnh-command', controls: 'dnh-controls', count: 'dnh-count',
+  actionError: 'dnh-action-error', authorizationAction: 'dnh-authorization-action', command: 'dnh-command', configOpen: 'dnh-config-open', controls: 'dnh-controls', count: 'dnh-count',
   description: 'dnh-description', details: 'dnh-details', detailGrid: 'dnh-detail-grid', error: 'dnh-error',
   eventBody: 'dnh-event-body', eventDescription: 'dnh-event-description', eventGroup: 'dnh-event-group',
   eventHeader: 'dnh-event-header', eventName: 'dnh-event-name', groupToggle: 'dnh-group-toggle', header: 'dnh-header',
@@ -274,6 +275,13 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
     if (typeof element?.scrollIntoView === 'function') element.scrollIntoView({ block: 'center' })
   }, [currentStatus, focusRequest, focusTargetKey])
 
+  const openCurrentConfig = async () => {
+    if (currentStatus === null || api.openConfig === undefined) return
+    setActionError(null)
+    try { await api.openConfig(currentStatus.scope.id) }
+    catch (error) { setActionError(requestErrorKey(error, 'updateFailed')) }
+  }
+
   const toggleEvent = (event: HookEvent) => setExpandedByScope(previous => {
     const next = new Map(previous)
     const events = new Set(next.get(selectedRef.current) ?? [])
@@ -303,7 +311,15 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
       <span>{t(pendingHooks.length === 1 ? 'reviewCountOne' : 'reviewCountMany', { count: pendingHooks.length })}</span>
       <button className={css.reviewAction} type="button" disabled={loading} onClick={reviewCurrentScope}>{t('reviewAction')}</button>
     </div>}
-    {currentStatus !== null && <div className={css.meta}><span>{t('configPath')}</span><code className={css.path}>{currentStatus.path}</code></div>}
+    {currentStatus !== null && <div className={css.meta}>
+      <span>{t('configPath')}</span>
+      <span className={css.path}><code>{currentStatus.path}</code>
+        <button className={css.configOpen} type="button" title={t('openConfig')} aria-label={t('openConfig')}
+          disabled={loading || api.openConfig === undefined} onClick={() => { void openCurrentConfig() }}>
+          <ExternalLink size={14} aria-hidden="true" />
+        </button>
+      </span>
+    </div>}
     {loading && currentStatus === null && <div className={css.notice} role="status">{t('loading')}</div>}
     {actionError !== null && <div className={css.actionError} role="alert">{t(actionError)}</div>}
     {currentStatus !== null && !currentStatus.exists && currentStatus.scope.kind === 'workspace' && <div className={css.notice}>{t('missingProject')}</div>}

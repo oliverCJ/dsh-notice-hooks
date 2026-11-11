@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { openNativeTextFile } from '@deepseek-ai/dsh-native-command'
 import { HookConfigConflictError } from './config-store.js'
 import type { HookConfigState } from './config-store.js'
 import { HookNotConfiguredEnabledError, type HookScopeBinding, type HookScopeManager } from './scope-manager.js'
@@ -86,7 +87,12 @@ function scopeStatus(
 }
 function methodNotAllowed(res: ServerResponse): void { fail(res, 405, 'method_not_allowed', 'Method not allowed.') }
 
-export function createHookRequestHandler(manager: HookScopeManager, runner: HookRunner, origin: () => string): (req: IncomingMessage, res: ServerResponse) => void {
+export function createHookRequestHandler(
+  manager: HookScopeManager,
+  runner: HookRunner,
+  origin: () => string,
+  openConfig: (path: string, signal: AbortSignal) => Promise<void> = openNativeTextFile,
+): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
       if (!trusted(req, origin)) { fail(res, 403, 'forbidden', 'Request is not allowed.'); return }
@@ -109,6 +115,16 @@ export function createHookRequestHandler(manager: HookScopeManager, runner: Hook
         const scopeId = typeof scopeValue === 'string' ? scopeValue : (() => { throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' }) })()
         const binding = await manager.accessScope(scopeId); const state = await binding.store.reload()
         send(res, 200, { ok: true, value: scopeStatus(binding, manager, runner, state) }); return
+      }
+      const openMatch = path.match(/^\/dsh-notice-hooks\/scopes\/([^/]+)\/open-config$/u)
+      if (openMatch !== null) {
+        if (req.method !== 'POST') return methodNotAllowed(res)
+        const scopeId = decodeSegment(openMatch[1] ?? '')
+        const binding = await manager.accessScope(scopeId)
+        const abort = new AbortController()
+        req.once('aborted', () => abort.abort())
+        await openConfig(binding.store.state().path, abort.signal)
+        send(res, 200, { ok: true, value: { opened: true } }); return
       }
       const match = path.match(/^\/dsh-notice-hooks\/scopes\/([^/]+)\/hooks\/([^/]+)\/(configured-enabled|authorization)$/u)
       if (match !== null) {

@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.28.5
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.9.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          test "$tag" = "$version"
+      - name: Run checks
+        run: pnpm run check
+      - name: Pack release tarball
+        run: pnpm pack --pack-destination release-assets
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/dsh-notice-hooks-*.tgz

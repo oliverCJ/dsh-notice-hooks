@@ -51,6 +51,7 @@ describe('Hook Settings client API', () => {
     await api.reload('workspace:alpha / beta')
     await api.setConfiguredEnabled('workspace:alpha / beta', 'notify / done', false, 4)
     await api.setAuthorized('workspace:alpha / beta', 'notify / done', false, 4)
+    await api.openConfig!('workspace:alpha / beta')
 
     expect(fetcher).toHaveBeenNthCalledWith(1, '/dsh-notice-hooks/reload', {
       method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
@@ -63,6 +64,9 @@ describe('Hook Settings client API', () => {
     expect(fetcher).toHaveBeenNthCalledWith(3, '/dsh-notice-hooks/scopes/workspace%3Aalpha%20%2F%20beta/hooks/notify%20%2F%20done/authorization', {
       method: 'PUT', headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({ authorized: false, revision: 4 }),
+    })
+    expect(fetcher).toHaveBeenNthCalledWith(4, '/dsh-notice-hooks/scopes/workspace%3Aalpha%20%2F%20beta/open-config', {
+      method: 'POST', headers: { accept: 'application/json', 'content-type': 'application/json' },
     })
     const calls = fetcher.mock.calls as unknown as Array<[RequestInfo | URL, RequestInit?]>
     expect(calls.flatMap(call => [String(call[0]), call[1]?.body]).join('\n')).not.toContain('/work/alpha')

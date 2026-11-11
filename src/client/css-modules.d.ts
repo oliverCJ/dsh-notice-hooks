@@ -18,6 +18,11 @@ declare module 'lucide-react/dist/esm/icons/webhook.js' {
   export default Webhook
 }
 
+declare module 'lucide-react/dist/esm/icons/external-link.js' {
+  const ExternalLink: typeof import('lucide-react').ExternalLink
+  export default ExternalLink
+}
+
 declare module 'lucide-react/dist/esm/icons/shield-alert.js' {
   const ShieldAlert: typeof import('lucide-react').ShieldAlert
   export default ShieldAlert

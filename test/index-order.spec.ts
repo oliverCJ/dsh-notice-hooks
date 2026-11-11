@@ -63,6 +63,7 @@ describe('runtime scope dispatch order', () => {
     const workspace = { id: 'project-a', path: project, title: 'Project A' }
     await grantConfiguredHooks(root, workspace)
     const ctx = new Context(); contexts.push(ctx)
+    ctx.provide('sessionController', { openWorkspacePath: vi.fn(async () => ({ opened: true as const })) } as never)
     ctx.provide('workspaceRegistry', {
       get: (id: string) => id === workspace.id ? workspace : undefined,
       list: () => [workspace],
@@ -101,6 +102,7 @@ describe('runtime scope dispatch order', () => {
     const workspace = { id: 'project-a', path: project, title: 'Project A' }
     await grantConfiguredHooks(root, workspace)
     const ctx = new Context(); contexts.push(ctx)
+    ctx.provide('sessionController', { openWorkspacePath: vi.fn(async () => ({ opened: true as const })) } as never)
     ctx.provide('workspaceRegistry', {
       get: (id: string) => id === workspace.id ? workspace : undefined,
       list: () => [workspace],

@@ -108,6 +108,9 @@ export class HookReviewController {
         () => this.remoteApi.setConfiguredEnabled(scopeId, id, enabled, revision), scopeId),
       setAuthorized: (scopeId, id, authorized, revision) => accepted(
         () => this.remoteApi.setAuthorized(scopeId, id, authorized, revision), scopeId),
+      ...(this.remoteApi.openConfig === undefined ? {} : {
+        openConfig: (scopeId: string) => this.remoteApi.openConfig!(scopeId),
+      }),
     }
     this.source = {
       getSnapshot: () => this.snapshot,

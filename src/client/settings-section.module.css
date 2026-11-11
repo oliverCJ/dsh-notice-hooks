@@ -126,7 +126,44 @@
   line-height: 18px;
 }
 
-.dnh-path,
+.dnh-path {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dnh-path code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dnh-config-open {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.dnh-config-open:hover:not(:disabled) {
+  border-color: var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.dnh-config-open:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .dnh-command {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -342,6 +379,7 @@
 .dnh-reload:focus-visible,
 .dnh-group-toggle:focus-visible,
 .dnh-authorization-action:focus-visible,
+.dnh-config-open:focus-visible,
 .dnh-review-action:focus-visible,
 .dnh-scope-select:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);

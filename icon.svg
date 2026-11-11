@@ -1,6 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Command Hooks">
-  <rect width="128" height="128" rx="24" fill="#202522"/>
-  <path d="M38 30v29c0 24 14 39 36 39 16 0 28-10 28-25 0-13-9-22-22-22H66" fill="none" stroke="#67d391" stroke-width="12" stroke-linecap="round"/>
-  <circle cx="38" cy="29" r="10" fill="#f2b84b"/>
-  <path d="m59 42 13 9-13 9" fill="none" stroke="#f4f7f5" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Whale Hook">
+  <defs>
+    <clipPath id="upper-lip-cover" clipPathUnits="userSpaceOnUse">
+      <rect x="23" y="58" width="16" height="14" rx="7"/>
+    </clipPath>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="#ffffff"/>
+  <rect x="1.5" y="1.5" width="125" height="125" rx="24.5" fill="none" stroke="#e5e7eb" stroke-width="3"/>
+  <g transform="translate(0 -4)">
+    <g transform="rotate(8 29 67)">
+      <g data-part="whale" transform="translate(2 0) scale(1.03)">
+        <path fill="#20242c" d="M25 67c-2-15 8-28 24-34 15-6 31-3 41 7l10-12c1 8 6 13 15 16-6 7-13 10-22 9 4 10 3 21-3 30-9 15-30 23-48 16-12-5-21-15-20-26 0-3 1-5 3-6Z"/>
+        <path fill="#ffffff" d="M27 67c7 3 15 4 23 2 10-2 17-7 22-14-1 14-10 26-24 30-10 3-19 0-24-6-3-4-2-9 3-12Z"/>
+        <path fill="#ffffff" d="M76 48c6-1 11 1 15 5-6 1-11 4-15 8 2-5 2-9 0-13Z"/>
+        <circle cx="43" cy="53" r="3.2" fill="#ffffff"/>
+        <circle cx="43" cy="53" r="1.35" fill="#20242c"/>
+      </g>
+    </g>
+    <path data-part="signal-line" d="M16 31c-1 4 3 6 1 10-1 3 2 5 3 7" fill="none" stroke="#f9c23c" stroke-width="1.8" stroke-linecap="round"/>
+    <path data-part="signal-wave" d="M12 29q4-4 8 0M9 26q7-7 14 0" fill="none" stroke="#f9c23c" stroke-width="1.8" stroke-linecap="round"/>
+    <path data-part="hook" fill="#f9c23c" transform="rotate(10 29 67) translate(2 44.5) scale(0.044)" d="M479.904 192a127.68 127.68 0 0 1-43.232 96 120 120 0 0 0-26.848 64.224l-1.92 352a139.616 139.616 0 0 0 20.608 79.808 112 112 0 0 0 44.448 37.984 184 184 0 0 0 71.232 18.08 139.52 139.52 0 0 0 79.648-20.576c16.32-11.2 29.44-26.56 37.984-44.448a179.264 179.264 0 0 0 16-50.176c1.152-6.784 1.92-13.632 2.24-20.512a117.696 117.696 0 0 0-11.168-43.552c-17.632-39.68-28.544-33.984-23.84-87.008l.64-7.232a43.84 43.84 0 0 0-17.952-36.48c-6.24-6.048-11.68-11.36-11.68-17.888 0 0 0-16 24-16 32 0 88.256 45.824 110.72 81.152a254.496 254.496 0 0 1 41.216 130.88 283.648 283.648 0 0 1-3.68 35.2 291.52 291.52 0 0 1-26.176 81.824 224.448 224.448 0 0 1-76 87.552 250.944 250.944 0 0 1-142.08 39.392 291.744 291.744 0 0 1-121.024-29.888 224.352 224.352 0 0 1-87.552-76.032 250.88 250.88 0 0 1-39.424-142.08l1.696-356.608a116.48 116.48 0 0 0-29.024-58.208 128 128 0 1 1 211.2-97.184L479.904 192zm-128 64a64 64 0 1 0 0-128 64 64 0 0 0 0 128z"/>
+    <g clip-path="url(#upper-lip-cover)">
+      <g transform="rotate(8 29 67)">
+        <g transform="translate(2 0) scale(1.03)">
+          <path fill="#20242c" d="M25 67c-2-15 8-28 24-34 15-6 31-3 41 7l10-12c1 8 6 13 15 16-6 7-13 10-22 9 4 10 3 21-3 30-9 15-30 23-48 16-12-5-21-15-20-26 0-3 1-5 3-6Z"/>
+        </g>
+      </g>
+    </g>
+  </g>
 </svg>

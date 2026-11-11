@@ -84,6 +84,7 @@ async function listen(
   target: HookConfigStore | HookScopeManager = createStore(),
   runner = createRunner(),
   origin?: string,
+  openConfig?: (path: string) => Promise<void>,
 ): Promise<{
   base: string
   server: Server
@@ -92,7 +93,7 @@ async function listen(
   let base = ''
   const manager = 'listScopes' in target ? target : createManager(target)
   const store = 'state' in target ? target : (await target.accessScope('user')).store
-  const server = createServer(createHookRequestHandler(manager, runner, () => origin ?? base))
+  const server = createServer(createHookRequestHandler(manager, runner, () => origin ?? base, openConfig))
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', resolve)
@@ -153,6 +154,17 @@ describe('hook settings HTTP API', () => {
         configuredEnabled: true, authorized: false, enabled: false, authorizationReason: 'not-approved',
       }],
     })
+  })
+
+  it('opens only the Host-selected scope configuration path', async () => {
+    const opened = vi.fn(async (_path: string) => undefined)
+    const fixture = await listen(createStore(), createRunner(), undefined, opened)
+    servers.push(fixture.server)
+
+    const response = await fetch(`${fixture.base}/dsh-notice-hooks/scopes/user/open-config`, { method: 'POST' })
+
+    expect(response.status).toBe(200)
+    expect(opened).toHaveBeenCalledWith('/tmp/hook.json', expect.any(AbortSignal))
   })
 
   it('reloads and independently updates Hook configuration and authorization', async () => {

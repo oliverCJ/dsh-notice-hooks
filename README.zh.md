@@ -1,8 +1,35 @@
 # dsh-notice-hooks
 
+<p align="center">
+  <a href="README.zh.md">中文</a> | <a href="README.md">English</a>
+</p>
+
+<p align="center">
+  <img src="assets/icon-180.png" alt="dsh-notice-hooks" width="120" />
+</p>
+
+<p align="center">
+  DeepSeek Harness 生命周期命令 Hook
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
+  <a href="https://app.codecov.io/gh/oliverCJ/dsh-notice-hooks"><img alt="Coverage" src="https://codecov.io/gh/oliverCJ/dsh-notice-hooks/branch/main/graph/badge.svg" /></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.3-blue.svg" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness-lightgrey.svg" />
+  <img alt="Built with" src="https://img.shields.io/badge/built%20with-TypeScript-3178C6.svg" />
+</p>
+
 为用户和项目配置自动化 Hook，在会话、工具调用、权限请求和上下文压缩等事件发生时运行命令。Hook 授权需在“Hooks 设置”中手动管理。
 
-[简明入口](./README.md)
+## 功能亮点
+
+- **14 类生命周期事件**：会话、工具、权限、子 Agent、停止和上下文压缩事件。
+- **用户/项目双层作用域**：用户 Hook 始终先于已注册 Workspace 项目 Hook。
+- **明确授权**：配置启用与执行授权分离，授权绑定完整执行指纹。
+- **Fail-closed 执行**：未授权、指纹变化和无效配置不会启动外部命令。
+- **紧凑活动行**：匹配事件可在 Chat flow 中显示一条可忽略的聚合活动行。
+- **可选 CC Notice 搭配**：可将事件转换为桌面通知、声音、Webhook 和硬件反馈。
 
 ## 环境要求
 
@@ -45,6 +72,14 @@ dsh plugin --profile tui add dsh-notice-hooks
 
 `dsh-notice-hooks` 提供生命周期 Hook 和明确的命令授权；搭配 [CC Notice](https://github.com/oliverCJ/cc-notice)，可以把 DeepSeek Harness 事件转换为可自定义的桌面通知、声音、Webhook 和硬件设备反馈。CC Notice 已内置 DeepSeek Harness Hook 配置适配，命令授权仍由你在 **Hooks 设置** 中控制。
 
+## Settings 页面预览
+
+Hooks 设置页面展示所有支持的生命周期事件、配置作用域、命令详情、启用状态和执行指纹授权状态。
+
+<p align="center">
+  <img src="assets/hook-settings.png" alt="dsh-notice-hooks Hooks 设置页面" width="900" />
+</p>
+
 ## 从源码安装
 
 ```sh
@@ -58,7 +93,7 @@ pnpm pack
 把生成的 tarball 安装到非 Desktop profile，版本变化时相应替换文件名：
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.2.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.3.tgz
 ```
 
 推荐安装 tarball，因为它会验证与 npm 发布相同的文件集合。如果直接安装源码目录，必须先运行 `pnpm run build`，运行入口位于 `lib/`。
@@ -222,6 +257,8 @@ Settings 导航和页面标题在中文界面显示为 `Hooks 设置`，在英�
 
 页面始终按固定顺序显示全部 14 个事件组；初始加载或服务不可用时也保留这些组，但在状态可用前禁止操作。包含配置的组默认展开，空组保持紧凑且可以展开；重新加载会保留每个作用域各自的展开状态。每个 Hook 都有配置启用开关和独立授权操作。开启配置后保持未授权，撤销授权后配置开关仍保持开启；两种情况都会进入待审核。关闭配置会撤销授权并停止审核提示。当前作用域存在待授权 Hook 时，页面会显示审核汇总条和每个 Hook 的状态；“审核”按钮会打开与当前会话共用的授权弹窗。只有当前会话的用户或项目作用域存在已声明启用但未授权的 Hook 时，输入框左侧才显示紧凑审核图标。弹窗在用户明确授权所选项或当前列表全部项之前，会展示 command、matcher、超时、并发、scope 和指纹变化状态；该操作不会授权未来新增 Hook 或变化后的指纹。Settings 展开详情仍显示命令、matcher、超时、并发限制、授权状态、近期聚合状态和 public scope。
 
+配置文件路径旁提供打开文件按钮，由 Host 使用平台默认关联编辑器打开已验证的作用域文件；Client 不会发送任意文件系统路径。
+
 作用域切换、重新加载和 revision 冲突恢复都有迟到响应保护，旧作用域的响应不会覆盖当前页面。工作区从注册表移除后，页面回退到用户作用域并显示本地化提示；项目配置缺失时显示空状态，不会创建文件。页面也会显示配置路径、无效配置和服务不可用状态，但不提供原始 JSON 编辑器。
 
 写配置时使用 revision 和内容哈希检查，拒绝符号链接和非普通文件，并在同一目录原子替换。替换前检测到的外部编辑会被拒绝。Node.js 的可移植文件系统 API 不提供条件式 rename，因此不协作的外部写入若恰好发生在最终哈希检查与 rename 之间，仍存在一个很窄的竞态窗口。
@@ -273,12 +310,17 @@ Hook 的启动失败、非零退出、超时和解析失败只记录诊断，不
 
 ## 开发与发布检查
 
+本地检查：
+
 ```sh
 pnpm run typecheck
 pnpm run typecheck:test
 pnpm run test
+pnpm run check:coverage
 pnpm run build
 pnpm pack --dry-run
 ```
+
+Pull Request 和推送到 `main` 会在 GitHub Actions 中使用 frozen lockfile 执行同样的检查，并把覆盖率报告上传到 Codecov。推送匹配的 `v*` tag 后，workflow 会再次检查、创建 GitHub Release，并上传可手工安装的 `.tgz`。Release workflow 不会自动发布 npm；npm 发布仍由维护者明确执行。
 
 许可证：[MIT](./LICENSE)。
