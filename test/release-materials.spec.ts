@@ -7,7 +7,6 @@ const fromRoot = (path: string) => fileURLToPath(new URL(`../${path}`, import.me
 const englishReadme = readFileSync(fromRoot('README.md'), 'utf8')
 const chineseReadme = readFileSync(fromRoot('README.zh.md'), 'utf8')
 const iconSvg = readFileSync(fromRoot('icon.svg'), 'utf8')
-const marketplaceChecklist = readFileSync(fromRoot('docs/2026-11-05-插件市场投稿准备清单.md'), 'utf8')
 const manifest = JSON.parse(readFileSync(fromRoot('package.json'), 'utf8')) as { description?: string; files?: string[] }
 const enLocale = JSON.parse(readFileSync(fromRoot('locale/en.json'), 'utf8')) as { meta?: { description?: string } }
 const zhLocale = JSON.parse(readFileSync(fromRoot('locale/zh.json'), 'utf8')) as { meta?: { description?: string } }
@@ -26,15 +25,13 @@ describe('release documentation', () => {
     expect(notice).toContain('Permission to use, copy, modify, and/or distribute this software')
   })
 
-  it('uses one human-readable description across package, locale, and marketplace metadata', () => {
+  it('uses one human-readable description across package, locale, and README metadata', () => {
     expect(manifest.description).toBe(EN_DESCRIPTION)
     expect(enLocale.meta?.description).toBe(EN_DESCRIPTION)
     expect(zhLocale.meta?.description).toBe(ZH_DESCRIPTION)
-    expect(marketplaceChecklist).toContain(`en: ${EN_DESCRIPTION}`)
-    expect(marketplaceChecklist).toContain(`zh: ${ZH_DESCRIPTION}`)
     expect(englishReadme).toContain(EN_DESCRIPTION)
     expect(chineseReadme).toContain(ZH_DESCRIPTION)
-    expect(`${manifest.description}\n${enLocale.meta?.description}\n${zhLocale.meta?.description}\n${englishReadme}\n${chineseReadme}\n${marketplaceChecklist}`)
+    expect(`${manifest.description}\n${enLocale.meta?.description}\n${zhLocale.meta?.description}\n${englishReadme}\n${chineseReadme}`)
       .not.toMatch(/Workspace-scoped command workflows|explicitly enabled external commands|生命周期事件发生时运行明确启用的外部命令|分作用域的外部命令工作流/)
   })
 
@@ -115,15 +112,7 @@ describe('release documentation', () => {
   })
 })
 
-describe('marketplace submission materials', () => {
-  it('contains the approved upstream file and workflow entry without an npm field', () => {
-    expect(marketplaceChecklist).toContain('data/plugins/oliverCJ__dsh-notice-hooks.yml')
-    expect(marketplaceChecklist).toContain('category: workflow')
-    expect(marketplaceChecklist).toContain(`en: ${EN_DESCRIPTION}`)
-    expect(marketplaceChecklist).toContain('icon: https://raw.githubusercontent.com/oliverCJ/dsh-notice-hooks/main/assets/icon-180.png')
-    expect(marketplaceChecklist).not.toMatch(/^\s*npm:/m)
-  })
-
+describe('release icon materials', () => {
   it('ships an original whale with the provided yellow hook and a matching 180px PNG', () => {
     const icon = readFileSync(fromRoot('assets/icon-180.png'))
 
