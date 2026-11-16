@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import { appendHookDispatchNotice, collectHookDispatch, type AppendPluginRecord } from './dispatch-notice.js'
+import { openActivityPreferencesStore } from './activity-preferences-store.js'
 import { classifySessionEvent, cleanupSessionEventState, sessionCreatedInvocation, sessionDisposedInvocation } from './events.js'
 import { createHookRunner } from './runner.js'
 import { createHookScopeManager } from './scope-manager.js'
@@ -39,6 +40,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   const appendRecord = await loadAppendPluginRecord(undefined, message => { try { logger.warn(message) } catch { /* isolated */ } })
   const workspaceRegistry: unknown = ctx.get('workspaceRegistry')
   const manager = await createHookScopeManager(isWorkspaceRegistryLike(workspaceRegistry) ? { workspaceRegistry } : {})
+  const preferences = await openActivityPreferencesStore()
   const runner = createHookRunner({ logger: { warn(message, error) { try { logger.warn(message, error) } catch { /* isolated */ } } } })
   const sessions = new Map<string, SessionLike>()
   const bindings = new Map<string, Promise<readonly HookScopeBinding[]>>()
@@ -88,7 +90,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
       try { void runner.run(scoped.runtimeId, scoped.hook, invocation.payload).catch(error => warn(`[dsh-notice-hooks] ${scoped.runtimeId} execution failed`, error)) }
       catch (error) { warn(`[dsh-notice-hooks] ${scoped.runtimeId} execution failed`, error) }
     }
-    try { appendHookDispatchNotice(session, decision.notice, appendRecord) }
+    try { appendHookDispatchNotice(session, decision.notice, appendRecord, preferences.state().showSessionActivity) }
     catch (error) { warn('[dsh-notice-hooks] failed to append Hook dispatch notice', error) }
   }
   async function release(session: SessionLike): Promise<void> {
@@ -101,7 +103,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     ctx.on('session/event', (session: Session, event: SessionEvent) => { const value = remember(session); try { const invocation = classifySessionEvent(value, event); if (invocation !== undefined) void dispatch(invocation, value).catch(error => warn('[dsh-notice-hooks] session event dispatch failed', error)) } catch (error) { warn('[dsh-notice-hooks] session event dispatch failed', error) } })
     ctx.on('session/disposed', session => { const value = remember(session); const invocation = sessionDisposedInvocation(value); cleanupSessionEventState(value); void dispatch(invocation, value).catch(error => warn('[dsh-notice-hooks] SessionEnd dispatch failed', error)).finally(() => release(value)) })
     const webServer: unknown = ctx.get('webServer')
-    if (isHookWebServer(webServer)) ctx.effect(() => registerHookServer(webServer, manager, runner), 'register Hook Settings API')
-  } catch (error) { for (const session of sessions.values()) cleanupSessionEventState(session); await runner.dispose(); await manager.dispose(); throw error }
-  return async () => { for (const session of sessions.values()) cleanupSessionEventState(session); sessions.clear(); bindings.clear(); await runner.dispose(); await manager.dispose() }
+    if (isHookWebServer(webServer)) ctx.effect(() => registerHookServer(webServer, manager, runner, undefined, preferences), 'register Hook Settings API')
+  } catch (error) { for (const session of sessions.values()) cleanupSessionEventState(session); await runner.dispose(); await preferences.dispose(); await manager.dispose(); throw error }
+  return async () => { for (const session of sessions.values()) cleanupSessionEventState(session); sessions.clear(); bindings.clear(); await runner.dispose(); await preferences.dispose(); await manager.dispose() }
 }

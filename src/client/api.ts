@@ -48,7 +48,13 @@ export interface HookStatus {
   readonly loadError: string | null
   readonly hooks: readonly HookView[]
 }
+export interface ActivityPreferences {
+  readonly showSessionActivity: boolean
+  readonly revision: number
+}
 export interface HookApi {
+  activityPreferences?(): Promise<ActivityPreferences>
+  setShowSessionActivity?(enabled: boolean, revision: number): Promise<ActivityPreferences>
   scopes(): Promise<readonly HookScopeView[]>
   status(scopeId: string): Promise<HookStatus>
   reload(scopeId: string): Promise<HookStatus>
@@ -127,6 +133,10 @@ function parseStatus(value: unknown, expectedScopeId: string): HookStatus | null
   }
   return { scope, path: value.path, exists: value.exists, revision: value.revision, loadError: value.loadError, hooks }
 }
+function parseActivityPreferences(value: unknown): ActivityPreferences | null {
+  if (!isRecord(value) || typeof value.showSessionActivity !== 'boolean' || !isIntegerInRange(value.revision, 0, Number.MAX_SAFE_INTEGER)) return null
+  return { showSessionActivity: value.showSessionActivity, revision: value.revision }
+}
 function parseScopes(value: unknown): readonly HookScopeView[] | null {
   if (!isRecord(value) || !Array.isArray(value.scopes) || value.scopes.length === 0) return null
   const scopes: HookScopeView[] = []
@@ -170,6 +180,14 @@ export function createHookApi(fetcher: Fetcher = globalThis.fetch.bind(globalThi
   const readHeaders = { accept: 'application/json' }
   const jsonHeaders = { ...readHeaders, 'content-type': 'application/json' }
   return {
+    async activityPreferences() {
+      return decode(await request(fetcher, `${API_PATH}/preferences`, { headers: readHeaders }), parseActivityPreferences)
+    },
+    async setShowSessionActivity(enabled, revision) {
+      return decode(await request(fetcher, `${API_PATH}/preferences/show-session-activity`, {
+        method: 'PUT', headers: jsonHeaders, body: JSON.stringify({ enabled, revision }),
+      }), parseActivityPreferences)
+    },
     async scopes() {
       return decode(await request(fetcher, `${API_PATH}/scopes`, { headers: readHeaders }), parseScopes)
     },

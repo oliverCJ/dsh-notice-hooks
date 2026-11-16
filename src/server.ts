@@ -3,6 +3,7 @@ import { openNativeTextFile } from '@deepseek-ai/dsh-native-command'
 import { HookConfigConflictError } from './config-store.js'
 import type { HookConfigState } from './config-store.js'
 import { HookNotConfiguredEnabledError, type HookScopeBinding, type HookScopeManager } from './scope-manager.js'
+import type { ActivityPreferencesStore } from './activity-preferences-store.js'
 import type { HookRunner, HookStats } from './runner.js'
 
 const API_PATH = '/dsh-notice-hooks'
@@ -92,6 +93,7 @@ export function createHookRequestHandler(
   runner: HookRunner,
   origin: () => string,
   openConfig: (path: string, signal: AbortSignal) => Promise<void> = openNativeTextFile,
+  preferences?: ActivityPreferencesStore,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {
     void (async () => {
@@ -108,6 +110,21 @@ export function createHookRequestHandler(
         const scopeId = requestedScope(req) ?? 'user'
         const binding = await manager.accessScope(scopeId)
         send(res, 200, { ok: true, value: scopeStatus(binding, manager, runner) }); return
+      }
+      if (path === `${API_PATH}/preferences`) {
+        if (req.method !== 'GET') return methodNotAllowed(res)
+        if (preferences === undefined) throw new RequestError(503, { code: 'preferences_unavailable', message: 'Activity preferences are unavailable.' })
+        send(res, 200, { ok: true, value: preferences.state() }); return
+      }
+      if (path === `${API_PATH}/preferences/show-session-activity`) {
+        if (req.method !== 'PUT') return methodNotAllowed(res)
+        if (preferences === undefined) throw new RequestError(503, { code: 'preferences_unavailable', message: 'Activity preferences are unavailable.' })
+        const body = await jsonBody(req)
+        if (!hasExactKeys(body, ['enabled', 'revision']) || typeof body.enabled !== 'boolean'
+          || !Number.isSafeInteger(body.revision) || Number(body.revision) < 0) {
+          throw new RequestError(400, { code: 'invalid_request', message: 'Invalid request.' })
+        }
+        send(res, 200, { ok: true, value: await preferences.setShowSessionActivity(body.enabled, Number(body.revision)) }); return
       }
       if (path === `${API_PATH}/reload`) {
         if (req.method !== 'POST') return methodNotAllowed(res)
@@ -157,6 +174,14 @@ export function createHookRequestHandler(
 }
 
 export interface HookWebServer { getOrigin(): string; register(route: { readonly kind: 'prefix'; readonly path: string; readonly handler: (req: IncomingMessage, res: ServerResponse) => void }): () => void }
-export function registerHookServer(webServer: HookWebServer, manager: HookScopeManager, runner: HookRunner): () => void {
-  return webServer.register({ kind: 'prefix', path: API_PATH, handler: createHookRequestHandler(manager, runner, () => webServer.getOrigin()) })
+export function registerHookServer(
+  webServer: HookWebServer,
+  manager: HookScopeManager,
+  runner: HookRunner,
+  openConfig?: (path: string, signal: AbortSignal) => Promise<void>,
+  preferences?: ActivityPreferencesStore,
+): () => void {
+  return webServer.register({ kind: 'prefix', path: API_PATH, handler: createHookRequestHandler(
+    manager, runner, () => webServer.getOrigin(), openConfig ?? openNativeTextFile, preferences,
+  ) })
 }

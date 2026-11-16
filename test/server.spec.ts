@@ -84,7 +84,8 @@ async function listen(
   target: HookConfigStore | HookScopeManager = createStore(),
   runner = createRunner(),
   origin?: string,
-  openConfig?: (path: string) => Promise<void>,
+  openConfig?: (path: string, signal: AbortSignal) => Promise<void>,
+  preferences?: import('../src/activity-preferences-store.js').ActivityPreferencesStore,
 ): Promise<{
   base: string
   server: Server
@@ -93,7 +94,7 @@ async function listen(
   let base = ''
   const manager = 'listScopes' in target ? target : createManager(target)
   const store = 'state' in target ? target : (await target.accessScope('user')).store
-  const server = createServer(createHookRequestHandler(manager, runner, () => origin ?? base, openConfig))
+  const server = createServer(createHookRequestHandler(manager, runner, () => origin ?? base, openConfig, preferences))
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', resolve)
@@ -154,6 +155,30 @@ describe('hook settings HTTP API', () => {
         configuredEnabled: true, authorized: false, enabled: false, authorizationReason: 'not-approved',
       }],
     })
+  })
+
+  it('reads and revision-writes the global activity preference', async () => {
+    let state = { showSessionActivity: true, revision: 0 }
+    const preferences = {
+      state: () => state,
+      setShowSessionActivity: vi.fn(async (value: boolean, revision: number) => {
+        if (revision !== state.revision) throw Object.assign(new Error('conflict'), { code: 'REVISION_CONFLICT' })
+        state = { showSessionActivity: value, revision: revision + 1 }
+        return state
+      }),
+      dispose: vi.fn(async () => undefined),
+    }
+    const fixture = await listen(createStore(), createRunner(), undefined, undefined, preferences)
+    servers.push(fixture.server)
+
+    const initial = await fetch(`${fixture.base}/dsh-notice-hooks/preferences`)
+    expect(await initial.json()).toEqual({ ok: true, value: { showSessionActivity: true, revision: 0 } })
+    const updated = await fetch(`${fixture.base}/dsh-notice-hooks/preferences/show-session-activity`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false, revision: 0 }),
+    })
+    expect(await updated.json()).toEqual({ ok: true, value: { showSessionActivity: false, revision: 1 } })
+    expect(preferences.setShowSessionActivity).toHaveBeenCalledWith(false, 0)
   })
 
   it('opens only the Host-selected scope configuration path', async () => {

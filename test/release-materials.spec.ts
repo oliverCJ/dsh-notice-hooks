@@ -56,7 +56,7 @@ describe('release documentation', () => {
       expect(readme).toContain('pnpm pack')
       expect(readme).not.toContain('--registry=')
       expect(readme).toContain('dsh plugin --profile web add dsh-notice-hooks')
-      expect(readme).toContain('dsh-notice-hooks-0.1.3.tgz')
+      expect(readme).toContain('dsh-notice-hooks-0.1.4.tgz')
     }
   })
 

@@ -56,6 +56,8 @@ function api(overrides: Partial<HookApi> = {}): HookApi {
         authorizationReason: authorized ? 'approved' as const : 'not-approved' as const,
       } : hook),
     })),
+    activityPreferences: vi.fn(async () => ({ showSessionActivity: true, revision: 0 })),
+    setShowSessionActivity: vi.fn(async (enabled, revision) => ({ showSessionActivity: enabled, revision: revision + 1 })),
     ...overrides,
   }
 }
@@ -82,6 +84,27 @@ describe('Hook Settings section', () => {
     const groups = screen.getAllByTestId('hook-event-group')
     expect(groups.map(group => within(group).getByRole('heading').textContent)).toEqual(events)
   }
+
+  it('loads and updates the global session activity toggle', async () => {
+    const client = api()
+    render(<HookSettingsSection {...reviewProps()} api={client} t={translator(en)} />)
+
+    const toggle = await screen.findByRole('checkbox', { name: 'Show session activity' })
+    expect(toggle).toBeChecked()
+    fireEvent.click(toggle)
+    expect(client.setShowSessionActivity).toHaveBeenCalledWith(false, 0)
+    expect(toggle).not.toBeChecked()
+  })
+
+  it('restores the toggle and reports an error when the Host rejects the update', async () => {
+    const client = api({ setShowSessionActivity: vi.fn(async () => { throw new Error('offline') }) })
+    render(<HookSettingsSection {...reviewProps()} api={client} t={translator(en)} />)
+
+    const toggle = await screen.findByRole('checkbox', { name: 'Show session activity' })
+    fireEvent.click(toggle)
+    await waitFor(() => expect(toggle).toBeChecked())
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not update this Hook. Reload and try again.')
+  })
 
   it('always renders all 14 event groups while scopes are loading', async () => {
     const scopes = deferred<readonly [typeof userScope, typeof projectScope]>()

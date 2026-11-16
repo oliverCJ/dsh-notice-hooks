@@ -101,6 +101,10 @@ export class HookReviewController {
       return status
     })
     this.clientApi = {
+      ...(this.remoteApi.activityPreferences === undefined ? {} : {
+        activityPreferences: () => this.remoteApi.activityPreferences!(),
+        setShowSessionActivity: (enabled: boolean, revision: number) => this.remoteApi.setShowSessionActivity!(enabled, revision),
+      }),
       scopes: () => this.remoteApi.scopes(),
       status: scopeId => accepted(() => this.remoteApi.status(scopeId), scopeId),
       reload: scopeId => accepted(() => this.remoteApi.reload(scopeId), scopeId),

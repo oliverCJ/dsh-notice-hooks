@@ -15,9 +15,14 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <a href="https://app.codecov.io/gh/oliverCJ/dsh-notice-hooks"><img alt="Coverage" src="https://codecov.io/gh/oliverCJ/dsh-notice-hooks/branch/main/graph/badge.svg" /></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.3-blue.svg" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.4-blue.svg" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness-lightgrey.svg" />
   <img alt="Built with" src="https://img.shields.io/badge/built%20with-TypeScript-3178C6.svg" />
+</p>
+
+<p align="center">
+  <a href="https://www.dsh.so/artifact/dsh-notice-hooks/?ref=badge" target="_blank"><img src="https://cdn.dsh.so/badge/dsh-notice-hooks.svg" /></a>
+  <a href="https://www.dsh.so/artifact/dsh-notice-hooks/?ref=badge-install" target="_blank"><img src="https://cdn.dsh.so/badge/install/dsh-notice-hooks@0.2.2-rc.1.svg" /></a>
 </p>
 
 为用户和项目配置自动化 Hook，在会话、工具调用、权限请求和上下文压缩等事件发生时运行命令。Hook 授权需在“Hooks 设置”中手动管理。
@@ -93,7 +98,7 @@ pnpm pack
 把生成的 tarball 安装到非 Desktop profile，版本变化时相应替换文件名：
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.3.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.4.tgz
 ```
 
 推荐安装 tarball，因为它会验证与 npm 发布相同的文件集合。如果直接安装源码目录，必须先运行 `pnpm run build`，运行入口位于 `lib/`。
@@ -259,6 +264,8 @@ Settings 导航和页面标题在中文界面显示为 `Hooks 设置`，在英�
 
 配置文件路径旁提供打开文件按钮，由 Host 使用平台默认关联编辑器打开已验证的作用域文件；Client 不会发送任意文件系统路径。
 
+页面还提供用户级 **显示会话活动提示** 开关，默认开启。关闭后只隐藏当前会话中的 dsh-notice-hooks 活动行，不影响 Hook 命令、授权、CC Notice 通知、Runner 统计或 DSH Goal/Task 执行。偏好保存在 `~/.dsh/dsh-notice-hooks/preferences.json`，不属于项目 Hook 配置。
+
 作用域切换、重新加载和 revision 冲突恢复都有迟到响应保护，旧作用域的响应不会覆盖当前页面。工作区从注册表移除后，页面回退到用户作用域并显示本地化提示；项目配置缺失时显示空状态，不会创建文件。页面也会显示配置路径、无效配置和服务不可用状态，但不提供原始 JSON 编辑器。
 
 写配置时使用 revision 和内容哈希检查，拒绝符号链接和非普通文件，并在同一目录原子替换。替换前检测到的外部编辑会被拒绝。Node.js 的可移植文件系统 API 不提供条件式 rename，因此不协作的外部写入若恰好发生在最终哈希检查与 rename 之间，仍存在一个很窄的竞态窗口。
@@ -321,6 +328,6 @@ pnpm run build
 pnpm pack --dry-run
 ```
 
-Pull Request 和推送到 `main` 会在 GitHub Actions 中使用 frozen lockfile 执行同样的检查，并把覆盖率报告上传到 Codecov。推送 `0.1.3` 这类数字版本 tag 后，workflow 会再次检查、创建 GitHub Release，并上传可手工安装的 `.tgz`。Release workflow 不会自动发布 npm；npm 发布仍由维护者明确执行。
+Pull Request 和推送到 `main` 会在 GitHub Actions 中使用 frozen lockfile 执行同样的检查，并把覆盖率报告上传到 Codecov。推送 `0.1.4` 这类数字版本 tag 后，workflow 会再次检查、创建 GitHub Release，并上传可手工安装的 `.tgz`。Release workflow 不会自动发布 npm；npm 发布仍由维护者明确执行。
 
 许可证：[MIT](./LICENSE)。

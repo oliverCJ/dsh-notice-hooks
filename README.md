@@ -15,9 +15,14 @@
 <p align="center">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" /></a>
   <a href="https://app.codecov.io/gh/oliverCJ/dsh-notice-hooks"><img alt="Coverage" src="https://codecov.io/gh/oliverCJ/dsh-notice-hooks/branch/main/graph/badge.svg" /></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1.3-blue.svg" />
+  <img alt="Version" src="https://img.shields.io/badge/version-0.1.4-blue.svg" />
   <img alt="Platform" src="https://img.shields.io/badge/platform-DeepSeek%20Harness-lightgrey.svg" />
   <img alt="Built with" src="https://img.shields.io/badge/built%20with-TypeScript-3178C6.svg" />
+</p>
+
+<p align="center">
+  <a href="https://www.dsh.so/artifact/dsh-notice-hooks/?ref=badge" target="_blank"><img src="https://cdn.dsh.so/badge/dsh-notice-hooks.svg" /></a>
+  <a href="https://www.dsh.so/artifact/dsh-notice-hooks/?ref=badge-install" target="_blank"><img src="https://cdn.dsh.so/badge/install/dsh-notice-hooks@0.2.2-rc.1.svg" /></a>
 </p>
 
 Configure automation Hooks for user and project scopes to run commands on session, tool, permission, and context-compaction events. Manage Hook authorization manually in Hooks setting.
@@ -93,7 +98,7 @@ pnpm pack
 Install the generated tarball into a non-Desktop profile, replacing the version when necessary:
 
 ```sh
-dsh plugin --profile web add ./dsh-notice-hooks-0.1.3.tgz
+dsh plugin --profile web add ./dsh-notice-hooks-0.1.4.tgz
 ```
 
 Packing is preferred to installing the source directory because it validates the same file set used by npm. If you do install a local directory, run `pnpm run build` first because the runtime entry points are under `lib/`.
@@ -259,6 +264,8 @@ The page always renders all 14 event groups in a fixed order, including during i
 
 The configuration path has an open-file button that asks the Host to open the verified scope file with the platform's default associated editor; the Client never sends an arbitrary filesystem path.
 
+The page also includes a user-level **Show session activity** switch. It is enabled by default. Turning it off hides dsh-notice-hooks activity rows from the current conversation, while Hook commands, authorization, CC Notice notifications, Runner statistics, and DSH Goal/Task execution continue unchanged. The preference is stored at `~/.dsh/dsh-notice-hooks/preferences.json` and is not part of project Hook configuration.
+
 Scope switching, reloads, and revision-conflict recovery reject stale responses, so a late response from an old scope cannot overwrite the current page. If a workspace is removed from the registry, the page falls back to the user scope and shows a localized notice. A missing project configuration shows an empty state without creating files. The page also reports the configuration path, invalid configuration, and service availability, but it is not a raw JSON editor.
 
 Configuration writes use revision and content-hash checks, reject symlinks and non-regular files, and replace the file atomically in the same directory. An external edit detected before replacement is rejected. Portable Node.js filesystem APIs do not provide conditional rename, so an uncooperative writer changing the file between the final hash check and rename remains a narrow race.
@@ -321,6 +328,6 @@ pnpm run build
 pnpm pack --dry-run
 ```
 
-Pull requests and pushes to `main` run the same frozen-lockfile checks in GitHub Actions and upload the coverage report to Codecov. Pushing a numeric version tag such as `0.1.3` runs the checks again, creates a GitHub Release, and attaches a prebuilt `.tgz` for manual installation. The release workflow does not publish to npm automatically; npm publication remains a deliberate maintainer action.
+Pull requests and pushes to `main` run the same frozen-lockfile checks in GitHub Actions and upload the coverage report to Codecov. Pushing a numeric version tag such as `0.1.4` runs the checks again, creates a GitHub Release, and attaches a prebuilt `.tgz` for manual installation. The release workflow does not publish to npm automatically; npm publication remains a deliberate maintainer action.
 
 License: [MIT](./LICENSE).

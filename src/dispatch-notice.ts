@@ -75,7 +75,8 @@ export function appendHookDispatchNotice(
   session: Session,
   notice: HookDispatchNotice | undefined,
   appendRecord?: AppendPluginRecord,
+  showSessionActivity = true,
 ): SessionSeq | undefined {
-  if (notice === undefined || notice.event === 'SessionEnd' || appendRecord === undefined) return undefined
+  if (!showSessionActivity || notice === undefined || notice.event === 'SessionEnd' || appendRecord === undefined) return undefined
   return appendRecord(session, HOOK_DISPATCH_RECORD, notice)
 }

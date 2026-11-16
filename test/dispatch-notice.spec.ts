@@ -124,6 +124,9 @@ describe('official Session plugin record', () => {
     const decision = collectHookDispatch(invocation(), [scopedHook('user', resolvedHook('notify'))])
 
     expect(appendHookDispatchNotice(session, decision.notice, appendPluginRecord)).toBe(0)
+    const hidden = Session.create(SessionId('hidden'))
+    expect(appendHookDispatchNotice(hidden, decision.notice, appendPluginRecord, false)).toBeUndefined()
+    expect(hidden.snapshotEvents()).toEqual([])
     const events = session.snapshotEvents()
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ type: HOOK_DISPATCH_RECORD, ignorable: true, data: decision.notice })

@@ -10,7 +10,7 @@ import type { MessageKey } from './i18n.js'
 import type { HookReviewSnapshot } from './review-controller.js'
 
 const css = {
-  actionError: 'dnh-action-error', authorizationAction: 'dnh-authorization-action', command: 'dnh-command', configOpen: 'dnh-config-open', controls: 'dnh-controls', count: 'dnh-count',
+  actionError: 'dnh-action-error', activityToggle: 'dnh-activity-toggle', authorizationAction: 'dnh-authorization-action', command: 'dnh-command', configOpen: 'dnh-config-open', controls: 'dnh-controls', count: 'dnh-count',
   description: 'dnh-description', details: 'dnh-details', detailGrid: 'dnh-detail-grid', error: 'dnh-error',
   eventBody: 'dnh-event-body', eventDescription: 'dnh-event-description', eventGroup: 'dnh-event-group',
   eventHeader: 'dnh-event-header', eventName: 'dnh-event-name', groupToggle: 'dnh-group-toggle', header: 'dnh-header',
@@ -137,6 +137,9 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
   statusRef.current = status
   const [loading, setLoading] = useState(true)
   const [actionError, setActionError] = useState<MessageKey | null>(null)
+  const [showSessionActivity, setShowSessionActivity] = useState(true)
+  const [activityRevision, setActivityRevision] = useState(0)
+  const [activityBusy, setActivityBusy] = useState(false)
   const [expandedByScope, setExpandedByScope] = useState<ReadonlyMap<string, ReadonlySet<HookEvent>>>(() => new Map())
   const [focusTargetKey, setFocusTargetKey] = useState<string | undefined>()
   const [focusRequest, setFocusRequest] = useState(0)
@@ -174,6 +177,13 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
   useEffect(() => {
     const token = ++generation.current
     setLoading(true)
+    if (api.activityPreferences !== undefined) {
+      void api.activityPreferences().then(value => {
+        if (token !== generation.current) return
+        setShowSessionActivity(value.showSessionActivity)
+        setActivityRevision(value.revision)
+      }, () => undefined)
+    }
     void api.scopes().then(values => {
       if (token !== generation.current) return
       setScopes(values)
@@ -190,6 +200,24 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
     })
     return () => { generation.current += 1 }
   }, [api, loadScope])
+
+  const updateSessionActivity = async (enabled: boolean) => {
+    if (api.setShowSessionActivity === undefined || activityBusy) return
+    const previous = showSessionActivity
+    setShowSessionActivity(enabled)
+    setActivityBusy(true)
+    setActionError(null)
+    try {
+      const value = await api.setShowSessionActivity(enabled, activityRevision)
+      setShowSessionActivity(value.showSessionActivity)
+      setActivityRevision(value.revision)
+    } catch (error) {
+      setShowSessionActivity(previous)
+      setActionError(requestErrorKey(error, 'updateFailed'))
+    } finally {
+      setActivityBusy(false)
+    }
+  }
 
   const selectScope = (scopeId: string) => {
     const token = ++generation.current
@@ -298,6 +326,11 @@ export function HookSettingsSection({ api, useHookReview, openReview, acceptRevi
         <RefreshCw size={16} strokeWidth={1.8} aria-hidden="true" />
       </button>
     </header>
+
+    {api.activityPreferences !== undefined && <label className={css.activityToggle}>
+      <span><strong>{t('showSessionActivity')}</strong><small>{t('showSessionActivityDescription')}</small></span>
+      <input type="checkbox" aria-label={t('showSessionActivity')} checked={showSessionActivity} disabled={activityBusy} onChange={(event) => { void updateSessionActivity(event.currentTarget.checked) }} />
+    </label>}
 
     {scopes.length > 0 && <div className={css.scope}>
       <label htmlFor="dnh-scope-select">{t('scope')}</label>
